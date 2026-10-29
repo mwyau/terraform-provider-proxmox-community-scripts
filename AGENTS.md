@@ -11,7 +11,7 @@ Goal: manage Proxmox Community Scripts LXC/VM guests natively through Terraform/
 - Creation-only defaults never modify existing hardware. Application updates and host-resource reconciliation are distinct explicit actions.
 - The canonical public `settings` names are identical to the Ansible feature-branch `LXC_FIELDS` (34) and `VM_FIELDS` (14). `script_vars` are protected, creation-only and cannot override normalized/Core controls. `guest_defaults` priority is explicit settings > kind > all > upstream script defaults.
 - For new resources `terraform plan` must inspect the pinned script and Core through bounded, read-only HTTP before apply. Plan failures stop missing, retired, or unsupported sources; static success never certifies unattended behavior. Unknown values require apply-time inspection.
-- Preserve Ansible naming where semantics match: `validate_certs`, `update_request_id`, `update_backup_storage`, `script_vars`, `guest_defaults`. Document explicit exceptions such as Terraform `vmid` for LXC and VM, `endpoint` vs Ansible `api_host`, and native CRUD vs Ansible `action`.
+- Preserve Ansible naming where semantics match: `validate_certs`, `update_request_id`, `update_backup_storage`, `script_vars`, `guest_defaults`. Document only intentional lifecycle differences such as Terraform CRUD vs Ansible `action`.
 
 ## Crash/interruption and state
 - Terraform state and state locking **do not** guarantee exactly-once side effects. Create may be interrupted after guest allocation but before state save; a failed Create is tainted and may otherwise rerun.
@@ -40,7 +40,7 @@ Goal: manage Proxmox Community Scripts LXC/VM guests natively through Terraform/
 ## Canonical contract and no aliases
 - The single versioned public schema is `contracts/guest.v1.json` in the Ansible repo, mirrored here. `scripts/check_ansible_contract.py` verifies both JSON copies and the exposed Python/Go field maps and public names on CI; breaking changes require a new contract version and coordinated PRs.
 - The only canonical Proxmox API endpoint parameter is `api_host`; never reintroduce `endpoint`, `insecure`, or `backup_storage` aliases. Use `validate_certs` and `update_backup_storage` exclusively.
-- Share `vmid` for LXC and VM. The lower-level Core `var_ctid` is not a public alias. Separately pin `scripts_ref` for installation and `update_scripts_ref` for updates.
+- Public `ctid` (LXC) and `vmid` (VM) are mutually exclusive. The lower-level Core `var_ctid` remains internal. Separately pin `scripts_ref` for installation and `update_scripts_ref` for updates.
 - Never use both engines to manage the same VMID's guest lifecycle/hardware. For Terraform-owned VMIDs, Ansible is read-only or in-guest/disjoint automation only. Explicitly document any handoff.
 
 ## Explicit identity contract (overrides any earlier vmid-only text)

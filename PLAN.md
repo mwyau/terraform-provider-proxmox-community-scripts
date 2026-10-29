@@ -42,10 +42,10 @@ Two credentials/privileges: least-privilege PVE API token for API; host root via
 Branch: `feat/go-provider-foundation`. Source and tests are checked by GitHub Actions on Ubuntu; no Proxmox privileged installer/updater/destructor is executed in public CI. The Go implementation covers Create/Read/Update/Delete/import but remains **experimental and not production-complete** pending real PVE integration, coordinator-hardening, script compatibility, signed runner delivery and crash tests against a disposable host. Do not mark any live-test item complete based on green mocked CI.
 
 ## Interface governance and dual-tool workflow
-- [x] Canonical `api_host`, `validate_certs`, `update_backup_storage` without legacy aliases; Ansible canonical `vmid` for both kinds and distinct `update_scripts_ref`.
+- [x] Canonical `api_host`, `validate_certs`, `update_backup_storage` without legacy aliases; Ansible `ctid` for LXC / `vmid` for VM and distinct `update_scripts_ref`.
 - [x] Versioned Ansible-owned `contracts/guest.v1.json` with Terraform mirror; CI compares public names and all 34/14 mappings. Breaking changes require version bump and coordinated PRs.
 - [ ] Enforce shared conversion fixtures across both languages in CI and block mismatched credential/guard semantics; increment contract schema for breaking changes.
 - [ ] Live-PVE ownership handoff tests: exported Terraform inventory to Ansible in-guest tasks, plus explicit import and state removal.
 
 ## Public identity correction (2026-10-29)
-The shared contract requires `ctid` for LXC or `vmid` for VM, mutually exclusive. Terraform's computed `id` remains the type-qualified import/state identity. This supersedes the temporary common-vmid-for-both public model; internal PVE operations still take a normalized numeric VMID.
+The shared contract requires `ctid` for LXC or `vmid` for VM, mutually exclusive. Terraform's computed `id` remains the type-qualified import/state identity. internal PVE operations still take a normalized numeric VMID.
