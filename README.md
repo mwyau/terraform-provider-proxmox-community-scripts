@@ -6,7 +6,7 @@ Experimental native Go provider, intended to complement [the Ansible Community S
 
 ## Usage
 
-See [examples/import.tf](examples/import.tf). Provider type: `communityscripts`; proposed Registry address: `mwyau/communityscripts` (**not published**). Import an existing positively identified guest:
+See [examples/import.tf](examples/import.tf). Provider type: `communityscripts`; proposed Registry address: `mwyau/proxmox-community-scripts` (**not published**). Import an existing positively identified guest:
 
 ```sh
 terraform import communityscripts_guest.adguard lxc/120

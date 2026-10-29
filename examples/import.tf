@@ -1,7 +1,7 @@
 # Example only; the provider is not yet published.
 terraform {
  required_providers {
-  communityscripts = { source = "mwyau/communityscripts" }
+  communityscripts = { source = "mwyau/proxmox-community-scripts" }
  }
 }
 variable "proxmox_api_token_id" { type = string; sensitive = true }

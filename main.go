@@ -8,6 +8,6 @@ import (
 )
 func main() {
  if err := providerserver.Serve(context.Background(), provider.New, providerserver.ServeOpts{
-  Address: "registry.terraform.io/mwyau/communityscripts",
+  Address: "registry.terraform.io/mwyau/proxmox-community-scripts",
  }); err != nil { log.Fatal(err) }
 }
