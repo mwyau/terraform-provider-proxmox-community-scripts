@@ -25,6 +25,7 @@ type fakePVE struct{
  failFetch bool
  extraID bool
  badPostflight bool
+ updaterMutatesHardware bool
  lastEnv map[string]string
 }
 func(f *fakePVE) Run(_ context.Context,name string,args []string,env map[string]string)(string,error){
@@ -38,7 +39,9 @@ func(f *fakePVE) Run(_ context.Context,name string,args []string,env map[string]
    b,_:=json.Marshal(list);return string(b),nil
   }
   if strings.HasSuffix(args[1],"/config"){
-   return fmt.Sprintf(`{"description":"https://community-scripts.org/scripts/%s"}`,f.script),nil
+   memory:=2048
+   if f.updaterMutatesHardware && f.updates>0{memory=4096}
+   return fmt.Sprintf(`{"description":"https://community-scripts.org/scripts/%s","memory":%d}`,f.script,memory),nil
   }
   if strings.HasSuffix(args[1],"/status/current"){
    return fmt.Sprintf(`{"status":"%s"}`,f.status),nil
@@ -193,4 +196,13 @@ func TestInstallerSuccessWithoutMatchingProvenanceIsUncertain(t *testing.T){
  j,ok,e:=readJournal(r.journalPath(q))
  if e!=nil||!ok||j.Phase!="uncertain"{t.Fatalf("journal %+v %v",j,e)}
  if f.creates!=1{t.Fatalf("script count %d",f.creates)}
+}
+
+func TestUpdateDetectsUnexpectedHardwareMutation(t *testing.T){
+ r,f:=newFake(t);f.exists=true;f.updaterMutatesHardware=true
+ q:=request("update");q.UpdateRequestID="next";q.BackupStorage="backup"
+ if _,e:=r.Handle(context.Background(),q);e==nil{t.Fatal("updater changed memory undetected")}
+ j,ok,e:=readJournal(r.updatePath(q))
+ if e!=nil||!ok||j.Phase!="uncertain"{t.Fatalf("journal %+v, err %v",j,e)}
+ if _,e:=r.Handle(context.Background(),q);e==nil{t.Fatal("unsafe replay after hardware change")}
 }
