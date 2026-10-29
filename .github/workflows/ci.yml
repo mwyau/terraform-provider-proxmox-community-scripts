@@ -47,3 +47,25 @@ jobs:
             rm -rf "$RUNNER_TEMP/validate-example"
           done
 
+  normalize-once:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/feat/go-provider-foundation'
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.7'
+      - name: Commit normalized Go source on feature branch only
+        run: |
+          go mod tidy
+          gofmt -w main.go internal/ cmd/
+          git add go.mod go.sum main.go internal/ cmd/
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Normalize Go lifecycle implementation formatting'
+          git push origin HEAD:feat/go-provider-foundation
