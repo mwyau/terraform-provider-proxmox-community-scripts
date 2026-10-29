@@ -37,6 +37,7 @@ func (c *Client) ApplyCompute(ctx context.Context,g Guest,values map[string]stri
   params.Set(k,strconv.FormatInt(n,10))
  }
  if len(params)==0{return nil}
+ if g.Digest!=""{params.Set("digest",g.Digest)}
  kind:=g.Kind;if kind=="vm"{kind="qemu"}
  path:="/nodes/"+url.PathEscape(g.Node)+"/"+kind+"/"+strconv.FormatInt(g.VMID,10)
  upid,e:=c.postConfig(ctx,path+"/config",params);if e!=nil{return e}
