@@ -24,4 +24,26 @@ jobs:
         run: go test -race ./...
       - name: Build
         run: go build ./...
+      - uses: hashicorp/setup-terraform@v3
+      - name: Validate Terraform examples against development provider
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/local-provider"
+          go build -o "$RUNNER_TEMP/local-provider/terraform-provider-proxmox-community-scripts" .
+          cat > "$RUNNER_TEMP/dev.tfrc" <<EOF
+          provider_installation {
+            dev_overrides {
+              "mwyau/proxmox-community-scripts" = "$RUNNER_TEMP/local-provider"
+            }
+            direct {}
+          }
+          EOF
+          export TF_CLI_CONFIG_FILE="$RUNNER_TEMP/dev.tfrc"
+          for source in examples/lifecycle.tf examples/import.tf; do
+            mkdir -p "$RUNNER_TEMP/validate-example"
+            cp "$source" "$RUNNER_TEMP/validate-example/main.tf"
+            (cd "$RUNNER_TEMP/validate-example" && terraform init -backend=false -input=false >/dev/null && terraform validate)
+            rm -rf "$RUNNER_TEMP/validate-example"
+          done
 
