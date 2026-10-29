@@ -19,15 +19,19 @@ Two credentials/privileges: least-privilege PVE API token for API; host root via
 
 ## Acceptance checklist
 - [x] initial Go provider, import skeleton, read-only API, CI compilation.
-- [ ] import hydrates required attributes; tests for name/slug/node provenance and API absence.
-- [ ] durable host runner, checked root/permissions, journal and lock; unit/fault injection.
-- [ ] pinned LXC creation and VM creation; real Core mapping and retired script checks.
-- [ ] CPU/RAM and disk grow-only reconciler with pending config handling.
-- [ ] explicit request-ID application updater with backup requirements and no implicit reinstall.
-- [ ] guarded deletion with intentional `retain` vs `delete` and partial-state protection.
-- [ ] documentation, sample HCL and end-to-end mocked tests for each lifecycle.
+- [x] import hydration and read-only provenance; API-failure and identity checks. Live imported-guest test remains pending.
+- [x] durable host runner, root-checked CLI, fsync journal, single-coordinator lock, and mocked fault-injection tests.
+- [x] guarded pinned LXC and VM creation paths with core field mappings and postflight unexpected-VMID detection. **Live script compatibility/retirement checks remain release blockers.**
+- [x] API-backed CPU/memory reconciliation and explicit grow-only disk resizing with config digest. **Pending/restart semantics need live tests.**
+- [x] pinned LXC updater with request-ID journal, backup storage requirement, updater slug verification and hardware-drift alarm.
+- [x] guarded deletion with retain-default, stopped-state and identity checks, operator opt-in, and journal tombstone.
+- [x] documentation, HCL samples, Go mocked API/runner tests, race-enabled test suite and Terraform schema validation.
 - [ ] self-hosted disposable PVE live test matrix: creation, interrupted process, second plan, VMID remap, update, destroy, import, PVE 8/9, storage backends.
 - [ ] registry packaging, signed releases and release gates (only after live tests).
 
 ## Out of scope without independent evidence
 - Automatic cleanup of arbitrary partial guests, cryptographically attested provenance, universal application-version detection, hidden disk shrink, changing VMID, active VM hardware mutation without restart plan, or executing upstream scripts on public CI runners.
+
+## Implementation checkpoint (October 29, 2026)
+
+Branch: `feat/go-provider-foundation`. Source and tests are checked by GitHub Actions on Ubuntu; no Proxmox privileged installer/updater/destructor is executed in public CI. The Go implementation covers Create/Read/Update/Delete/import but remains **experimental and not production-complete** pending real PVE integration, coordinator-hardening, script compatibility, signed runner delivery and crash tests against a disposable host. Do not mark any live-test item complete based on green mocked CI.
