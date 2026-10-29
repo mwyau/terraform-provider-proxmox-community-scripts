@@ -2,6 +2,8 @@ package contract
 
 import (
 	"reflect"
+ "encoding/json"
+ "os"
 	"strings"
 	"testing"
 )
@@ -102,4 +104,28 @@ func TestAllAnsibleFieldsReachRawCoreEnvironment(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestVersionedSharedGoldenCases(t *testing.T) {
+ var shared struct {
+  Version int `json:"schema_version"`
+  LX map[string]string `json:"lxc_fields"`
+  VM map[string]string `json:"vm_fields"`
+  Cases []struct {
+   Kind string `json:"kind"`
+   Settings map[string]string `json:"settings"`
+   Expected map[string]string `json:"expected_env"`
+  } `json:"encoding_cases"`
+ }
+ data,e:=os.ReadFile("../../contracts/guest.v1.json")
+ if e!=nil{t.Fatal(e)}
+ if e=json.Unmarshal(data,&shared);e!=nil{t.Fatal(e)}
+ if shared.Version!=1||!reflect.DeepEqual(shared.LX,LXCFields)||!reflect.DeepEqual(shared.VM,VMFields){
+  t.Fatal("Go field maps diverged from the versioned canonical contract")
+ }
+ for _,tc:=range shared.Cases{
+  got,e:=Environment(tc.Kind,tc.Settings,nil)
+  if e!=nil{t.Fatalf("%s: %v",tc.Kind,e)}
+  if !reflect.DeepEqual(got,tc.Expected){t.Fatalf("%s got=%v expected=%v",tc.Kind,got,tc.Expected)}
+ }
 }
