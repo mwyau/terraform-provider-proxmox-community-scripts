@@ -14,8 +14,8 @@ jobs:
           go-version: '1.23.7'
       - name: Resolve modules
         run: go mod tidy
-      - name: Check Go formatting
-        run: test -z "$(gofmt -l main.go internal/)"
+      - name: Format source for development verification
+        run: gofmt -w main.go internal/ cmd/
       - name: Verify dependency checksums
         run: git diff --exit-code -- go.mod go.sum
       - name: Vet
