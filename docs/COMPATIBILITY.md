@@ -71,7 +71,7 @@ and the 14 VM keys:
 
 `cores memory disk_size hostname bridge vlan storage mac mtu cpu_type machine start disk_cache timezone`
 
-to the Ansible Core environment mappings in `internal/contract/contract.go`. The canonical versioned specification is `contracts/guest.v1.json`, authored in the Ansible repository and copied here. `scripts/check_ansible_contract.py` verifies the JSON copies, both source maps, both public schemas and the absence of temporary aliases on every Terraform CI run. Conversions also have shared golden tests.
+to the Ansible Core environment mappings in `internal/contract/contract.go`. The canonical versioned specification is `contracts/guest.v1.json`, authored in the Ansible repository and copied here. `scripts/check_ansible_contract.py` verifies the JSON copies against the immutable Ansible SHA in `contracts/ansible.sha`, both source maps, both public schemas and the absence of temporary aliases on every Terraform CI run. Conversions also have shared golden tests.
 
 Important conversions:
 - LXC `privileged=true` means `var_unprivileged=0`; false means 1.

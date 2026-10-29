@@ -38,7 +38,7 @@ Goal: manage Proxmox Community Scripts LXC/VM guests natively through Terraform/
 - Do not change the default branch without an explicit request.
 
 ## Canonical contract and no aliases
-- The single versioned public schema is `contracts/guest.v1.json` in the Ansible repo, mirrored here. `scripts/check_ansible_contract.py` verifies both JSON copies and the exposed Python/Go field maps and public names on CI; breaking changes require a new contract version and coordinated PRs.
+- The single versioned public schema is `contracts/guest.v1.json` in the Ansible repo, mirrored here with a pinned Ansible commit in `contracts/ansible.sha`. `scripts/check_ansible_contract.py` verifies both JSON copies and the exposed Python/Go field maps and public names on CI; breaking changes require a new contract version and coordinated PRs.
 - The only canonical Proxmox API endpoint parameter is `api_host`; never reintroduce `endpoint`, `insecure`, or `backup_storage` aliases. Use `validate_certs` and `update_backup_storage` exclusively.
 - Public `ctid` (LXC) and `vmid` (VM) are mutually exclusive. The lower-level Core `var_ctid` remains internal. Separately pin `scripts_ref` for installation and `update_scripts_ref` for updates.
 - Never use both engines to manage the same VMID's guest lifecycle/hardware. For Terraform-owned VMIDs, Ansible is read-only or in-guest/disjoint automation only. Explicitly document any handoff.
@@ -46,3 +46,5 @@ Goal: manage Proxmox Community Scripts LXC/VM guests natively through Terraform/
 ## Explicit identity contract (overrides any earlier vmid-only text)
 - Public Terraform and Ansible use exactly one of `ctid` (LXC) or `vmid` (VM), based on `kind`. Keep numeric VMID as the internal Proxmox API/host-runner field.
 - Terraform `id` remains computed, type-qualified (`lxc/120` or `vm/121`); never expose it as a third public creation key. Update v1 contract, tests, CI and examples together.
+
+- Cross-repository CI MUST use the immutable commit from `contracts/ansible.sha`, not a moving feature branch. Update the SHA and mirrored JSON as one reviewed change whenever the contract evolves; use `--ansible-ref <SHA>` for a one-time audit.

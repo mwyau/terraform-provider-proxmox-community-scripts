@@ -49,3 +49,6 @@ Branch: `feat/go-provider-foundation`. Source and tests are checked by GitHub Ac
 
 ## Public identity correction (2026-10-29)
 The shared contract requires `ctid` for LXC or `vmid` for VM, mutually exclusive. Terraform's computed `id` remains the type-qualified import/state identity. internal PVE operations still take a normalized numeric VMID.
+
+## Reproducible cross-repo validation
+Terraform CI pins the exact Ansible commit through `contracts/ansible.sha`. This prevents incoherent moving-branch reads while both PRs are being updated. Bump this SHA and the JSON mirror together for each coordinated contract change. Tests compare implementation maps and public names against the pinned Ansible source; no runtime cross-repo dependency is added.

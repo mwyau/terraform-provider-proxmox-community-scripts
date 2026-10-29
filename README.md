@@ -86,7 +86,7 @@ MIT licensed. Not affiliated with Proxmox Server Solutions or Community Scripts 
 
 ## Contract synchronization and division of ownership
 
-The canonical `contracts/guest.v1.json` lives in the Ansible repository; an identical copy is committed here. CI fails if the versions, normalized mappings (34 LXC / 14 VM), public input names or supported conversion fixtures diverge. Make interface changes in a coordinated pair of PRs, updating both implementations and tests; bump the contract version for breaking changes. Do **not** add deprecated or compatibility aliases. The versioned contract is a shared schema, not shared runtime state.
+The canonical `contracts/guest.v1.json` lives in the Ansible repository; an identical copy is committed here. CI compares against the immutable Ansible commit recorded in `contracts/ansible.sha`, and fails if the versions, normalized mappings (34 LXC / 14 VM), or public input names diverge. Update this pin in coordinated PRs when changing the contract. Make interface changes in a coordinated pair of PRs, updating both implementations and tests; bump the contract version for breaking changes. Do **not** add deprecated or compatibility aliases. The versioned contract is a shared schema, not shared runtime state.
 
 For a VMID declared in Terraform, use Terraform for create, hardware changes, updates and destroy. Use Ansible for disjoint in-guest configuration (including its guest SSH connection), inspection, or separately owned PVE host services; do not also use Ansible `action: present/reconcile/update` on the same VMID. Ownership transfer is explicit import/removal, never duplicate state management. See [docs/OWNERSHIP.md](docs/OWNERSHIP.md).
 

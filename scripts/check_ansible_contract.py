@@ -47,8 +47,10 @@ def schema_keys(source):
     return set(re.findall(r'^\s*"([a-z_][a-z0-9_]*)":\s+schema\.',source,re.M))
 def main():
     ap=argparse.ArgumentParser()
-    ap.add_argument("--ansible-ref",default="feat/collection-foundation")
+    ap.add_argument("--ansible-ref",default=(ROOT/"contracts/ansible.sha").read_text().strip(),help="Immutable Ansible commit SHA; override only for development audits")
     a=ap.parse_args()
+    if not re.fullmatch(r"[a-f0-9]{40}",a.ansible_ref):
+        raise SystemExit("Contract validation requires an immutable 40-character Ansible commit")
     canonical=json.loads((ROOT/"contracts/guest.v1.json").read_text())
     upstream=json.loads(retrieve(a.ansible_ref,"contracts/guest.v1.json"))
     if upstream!=canonical:
