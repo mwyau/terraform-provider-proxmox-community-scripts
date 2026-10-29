@@ -3,6 +3,7 @@ package provider
 import (
  "context"
  "fmt"
+ "strconv"
  "strings"
 
  "github.com/hashicorp/terraform-plugin-framework/path"
@@ -32,6 +33,7 @@ func (r *GuestResource) Schema(_ context.Context,_ resource.SchemaRequest,resp *
   "status":schema.StringAttribute{Computed:true},
   "scripts_ref":schema.StringAttribute{Optional:true,MarkdownDescription:"Immutable 40-char Community Scripts commit used only at creation."},
   "core_ref":schema.StringAttribute{Optional:true,MarkdownDescription:"Immutable 40-char Core commit used only at creation."},
+  "disk_key":schema.StringAttribute{Optional:true,MarkdownDescription:"Existing disk to grow: rootfs for LXC; explicit scsiN/virtioN/sataN/ideN for VM. Never creates or moves disks."},
   "settings":schema.MapAttribute{ElementType:types.StringType,Optional:true,MarkdownDescription:"Creation settings (cores,memory,disk_size,hostname,bridge,vlan,storage) mapped to the upstream Core variables. Only cores/memory can be changed in-place."},
   "accept_unverified_install":schema.BoolAttribute{Optional:true,MarkdownDescription:"Explicit high-risk approval for running unverified root installation code."},
   "allow_hardware_updates":schema.BoolAttribute{Optional:true,MarkdownDescription:"Allow explicitly requested in-place CPU/memory changes."},
@@ -53,6 +55,7 @@ type guestModel struct{
  ScriptsRef types.String `tfsdk:"scripts_ref"`
  CoreRef types.String `tfsdk:"core_ref"`
  Settings types.Map `tfsdk:"settings"`
+ DiskKey types.String `tfsdk:"disk_key"`
  Accept types.Bool `tfsdk:"accept_unverified_install"`
  Hardware types.Bool `tfsdk:"allow_hardware_updates"`
  UpdateID types.String `tfsdk:"update_request_id"`
@@ -127,6 +130,22 @@ func (r *GuestResource) Read(ctx context.Context,req resource.ReadRequest,resp *
  }
  m.ID=types.StringValue(id.String());m.Node=types.StringValue(g.Node);m.Kind=types.StringValue(g.Kind);m.VMID=types.Int64Value(g.VMID)
  m.Script=types.StringValue(script);m.Status=types.StringValue(g.Status)
+ // Refresh observed managed compute/disk values; do not synthesize creation-only defaults.
+ if !m.Settings.IsNull(){
+  vals,e:=m.options(ctx);if e!=nil{resp.Diagnostics.AddError("Invalid saved settings",e.Error());return}
+  if _,ok:=vals["cores"];ok&&g.Cores>0{vals["cores"]=strconv.FormatInt(g.Cores,10)}
+  if _,ok:=vals["memory"];ok&&g.Memory>0{vals["memory"]=strconv.FormatInt(g.Memory,10)}
+  if _,ok:=vals["disk_size"];ok{
+   key:=m.DiskKey.ValueString()
+   if key==""&&g.Kind=="lxc"{key="rootfs"}
+   cfg,found:=g.Disks[key];if !found{resp.Diagnostics.AddError("Managed disk missing",fmt.Sprintf("Disk %q absent; retaining state.",key));return}
+   size,e:=proxmox.DiskGiB(cfg);if e!=nil{resp.Diagnostics.AddError("Disk size unavailable",e.Error());return}
+   vals["disk_size"]=strconv.FormatFloat(size,'f',-1,64)
+  }
+  nv,ds:=types.MapValueFrom(ctx,types.StringType,vals)
+  resp.Diagnostics.Append(ds...);if resp.Diagnostics.HasError(){return}
+  m.Settings=nv
+ }
  resp.Diagnostics.Append(resp.State.Set(ctx,&m)...)
 }
 func (r *GuestResource) Update(ctx context.Context,req resource.UpdateRequest,resp *resource.UpdateResponse){
@@ -136,8 +155,8 @@ func (r *GuestResource) Update(ctx context.Context,req resource.UpdateRequest,re
  resp.Diagnostics.Append(req.Plan.Get(ctx,&plan)...)
  if resp.Diagnostics.HasError(){return}
  if e:=plan.validate();e!=nil{resp.Diagnostics.AddError("Invalid guest",e.Error());return}
- if old.Kind!=plan.Kind||old.VMID!=plan.VMID||old.Node!=plan.Node||old.Script!=plan.Script||old.ScriptsRef!=plan.ScriptsRef||old.CoreRef!=plan.CoreRef {
-  resp.Diagnostics.AddError("Immutable guest identity/source","Changing node, VMID, kind, script, or installation refs is not supported. Import or use an explicit migration plan.");return
+ if old.Kind!=plan.Kind||old.VMID!=plan.VMID||old.Node!=plan.Node||old.Script!=plan.Script||old.ScriptsRef!=plan.ScriptsRef||old.CoreRef!=plan.CoreRef || old.DiskKey!=plan.DiskKey {
+  resp.Diagnostics.AddError("Immutable guest identity/source","Changing node, VMID, kind, script, disk key, or installation refs is not supported. Import or use an explicit migration plan.");return
  }
  g,found,e:=r.runtime.API.FindGuest(ctx,plan.VMID.ValueInt64())
  if e!=nil||!found{resp.Diagnostics.AddError("Cannot inspect guest","Refusing update without positive guest inspection.");return}
@@ -149,7 +168,7 @@ func (r *GuestResource) Update(ctx context.Context,req resource.UpdateRequest,re
  delta:=map[string]string{}
  if !old.Settings.Equal(plan.Settings) {
   for k,v:=range newOpts{if oldOpts[k]!=v {
-   if k!="cores"&&k!="memory"{resp.Diagnostics.AddError("Creation-only setting",fmt.Sprintf("%s cannot be changed in place",k));return}
+   if k!="cores"&&k!="memory"&&k!="disk_size"{resp.Diagnostics.AddError("Creation-only setting",fmt.Sprintf("%s cannot be changed in place",k));return}
    delta[k]=v
   }}
   for k:=range oldOpts{if _,ok:=newOpts[k];!ok {resp.Diagnostics.AddError("Settings removal unsupported","Removing a previously managed setting is not an approved mutation.");return}}
@@ -160,8 +179,19 @@ func (r *GuestResource) Update(ctx context.Context,req resource.UpdateRequest,re
   resp.Diagnostics.AddError("Missing update prerequisites","Set update_scripts_ref, backup_storage, and provider ssh_target.");return
  }
  if len(delta)>0{
-  if e=r.runtime.API.ApplyCompute(ctx,g,delta);e!=nil{
-   resp.Diagnostics.AddError("Hardware update failed or uncertain","Inspect actual Proxmox config before retry: "+e.Error());return
+  if disk,ok:=delta["disk_size"];ok{
+   delete(delta,"disk_size")
+   key:=plan.DiskKey.ValueString()
+   if key==""&&g.Kind=="lxc"{key="rootfs"}
+   if e=r.runtime.API.GrowDisk(ctx,g,key,disk);e!=nil{resp.Diagnostics.AddError("Disk growth failed or refused","Inspect disk and state before retry: "+e.Error());return}
+  }
+  if len(delta)>0{
+   // A previous resize can change the Proxmox config digest: re-read before writes.
+   g,found,e=r.runtime.API.FindGuest(ctx,plan.VMID.ValueInt64())
+   if e!=nil||!found{resp.Diagnostics.AddError("Cannot re-inspect guest","Disk may have grown; inspect manually before retry.");return}
+   if e=r.runtime.API.ApplyCompute(ctx,g,delta);e!=nil{
+    resp.Diagnostics.AddError("Hardware update failed or uncertain","Inspect actual Proxmox config before retry: "+e.Error());return
+   }
   }
  }
  if newUpdate {
