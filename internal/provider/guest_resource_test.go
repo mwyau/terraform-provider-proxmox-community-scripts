@@ -61,18 +61,34 @@ func TestCanonicalUpdateBackupStorage(t *testing.T) {
 }
 
 func TestKindSpecificIDs(t *testing.T) {
- base:=guestModel{Node:types.StringValue("pve1"),Kind:types.StringValue("lxc"),CTID:types.Int64Value(120),Script:types.StringValue("adguard")}
- if e:=base.validate();e!=nil{t.Fatal(e)}
- if base.id().String()!="lxc/120"{t.Fatalf("wrong LXC state ID %s",base.id().String())}
- base.VMID=types.Int64Value(121)
- if e:=base.validate();e==nil{t.Fatal("accepted CTID and VMID together")}
- base.CTID=types.Int64Null()
- if e:=base.validate();e==nil{t.Fatal("accepted VMID for LXC")}
- base.Kind=types.StringValue("vm")
- if e:=base.validate();e!=nil{t.Fatal(e)}
- if base.id().String()!="vm/121"{t.Fatalf("wrong VM state ID %s",base.id().String())}
- base.CTID=types.Int64Value(120)
- if e:=base.validate();e==nil{t.Fatal("accepted CTID on VM")}
- base.VMID=types.Int64Null()
- if e:=base.validate();e==nil{t.Fatal("accepted VM without VMID")}
+	base := guestModel{Node: types.StringValue("pve1"), Kind: types.StringValue("lxc"), CTID: types.Int64Value(120), Script: types.StringValue("adguard")}
+	if e := base.validate(); e != nil {
+		t.Fatal(e)
+	}
+	if base.id().String() != "lxc/120" {
+		t.Fatalf("wrong LXC state ID %s", base.id().String())
+	}
+	base.VMID = types.Int64Value(121)
+	if e := base.validate(); e == nil {
+		t.Fatal("accepted CTID and VMID together")
+	}
+	base.CTID = types.Int64Null()
+	if e := base.validate(); e == nil {
+		t.Fatal("accepted VMID for LXC")
+	}
+	base.Kind = types.StringValue("vm")
+	if e := base.validate(); e != nil {
+		t.Fatal(e)
+	}
+	if base.id().String() != "vm/121" {
+		t.Fatalf("wrong VM state ID %s", base.id().String())
+	}
+	base.CTID = types.Int64Value(120)
+	if e := base.validate(); e == nil {
+		t.Fatal("accepted CTID on VM")
+	}
+	base.VMID = types.Int64Null()
+	if e := base.validate(); e == nil {
+		t.Fatal("accepted VM without VMID")
+	}
 }

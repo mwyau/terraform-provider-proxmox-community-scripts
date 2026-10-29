@@ -161,10 +161,16 @@ func (m guestModel) validate() error {
 	default:
 		return fmt.Errorf("kind must be lxc or vm")
 	}
-	if _,e:=recovery.ParseID(m.id().String());e!=nil {return e}
-	if m.Node.ValueString()=="" || m.Script.ValueString()=="" {return fmt.Errorf("node and script cannot be empty")}
-	p:=m.DeletionPolicy.ValueString()
-	if p!="" && p!="retain" && p!="delete" {return fmt.Errorf("deletion_policy must be retain or delete")}
+	if _, e := recovery.ParseID(m.id().String()); e != nil {
+		return e
+	}
+	if m.Node.ValueString() == "" || m.Script.ValueString() == "" {
+		return fmt.Errorf("node and script cannot be empty")
+	}
+	p := m.DeletionPolicy.ValueString()
+	if p != "" && p != "retain" && p != "delete" {
+		return fmt.Errorf("deletion_policy must be retain or delete")
+	}
 	return nil
 }
 func (r *GuestResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -256,16 +262,16 @@ func (r *GuestResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		resp.Diagnostics.AddError("Guest absent or not visible", "Cannot prove VMID absence from a permissions-filtered API response. Inspect inventory and use terraform state rm only after verification.")
 		return
 	}
-	if !m.Kind.IsNull() && m.Kind.ValueString()!=id.Kind {
+	if !m.Kind.IsNull() && m.Kind.ValueString() != id.Kind {
 		resp.Diagnostics.AddError("Guest kind conflicts with imported state", "Type in HCL does not match imported identity; retaining state.")
 		return
 	}
-	if id.Kind=="lxc" {
-		if !m.VMID.IsNull() || (!m.CTID.IsNull() && m.CTID.ValueInt64()!=id.VMID) {
+	if id.Kind == "lxc" {
+		if !m.VMID.IsNull() || (!m.CTID.IsNull() && m.CTID.ValueInt64() != id.VMID) {
 			resp.Diagnostics.AddError("Conflicting CTID/VMID", "Imported LXC must use ctid only.")
 			return
 		}
-	} else if !m.CTID.IsNull() || (!m.VMID.IsNull() && m.VMID.ValueInt64()!=id.VMID) {
+	} else if !m.CTID.IsNull() || (!m.VMID.IsNull() && m.VMID.ValueInt64() != id.VMID) {
 		resp.Diagnostics.AddError("Conflicting CTID/VMID", "Imported VM must use vmid only.")
 		return
 	}
@@ -289,12 +295,12 @@ func (r *GuestResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	m.ID = types.StringValue(id.String())
 	m.Node = types.StringValue(g.Node)
 	m.Kind = types.StringValue(g.Kind)
-	if g.Kind=="lxc" {
-		m.CTID=types.Int64Value(g.VMID)
-		m.VMID=types.Int64Null()
+	if g.Kind == "lxc" {
+		m.CTID = types.Int64Value(g.VMID)
+		m.VMID = types.Int64Null()
 	} else {
-		m.VMID=types.Int64Value(g.VMID)
-		m.CTID=types.Int64Null()
+		m.VMID = types.Int64Value(g.VMID)
+		m.CTID = types.Int64Null()
 	}
 	m.Script = types.StringValue(script)
 	m.Status = types.StringValue(g.Status)
