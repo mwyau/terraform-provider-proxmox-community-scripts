@@ -233,7 +233,9 @@ func (r *Runner) update(ctx context.Context,req Request)(Result,error){
  g,e:=r.requireGuest(ctx,req);if e!=nil{return Result{},e}
  if g.Status!="running"{return Result{},errors.New("LXC must be running for updater")}
  // Run a positive LXC updater entrypoint inspection before any updater is invoked.
- _,e=r.exec(ctx,"pct","exec",fmt.Sprint(req.VMID),"--","test","-r","/usr/bin/update");if e!=nil{return Result{},e}
+ entry,e:=r.exec(ctx,"pct","exec",fmt.Sprint(req.VMID),"--","cat","/usr/bin/update");if e!=nil{return Result{},e}
+ slug,e:=proxmox.DetectUpdaterSlug(entry);if e!=nil{return Result{},e}
+ if slug!=req.Script{return Result{},errors.New("LXC updater script identity conflicts with requested script")}
  j,e=newJournal(req);if e!=nil{return Result{},e}
  if e=atomicJournal(path,j);e!=nil{return Result{},e}
  fail:=func(err error)(Result,error){j.Phase="uncertain";j.Error="operator inspection required";_ = atomicJournal(path,j);return Result{Status:"uncertain",Journal:path},err}
