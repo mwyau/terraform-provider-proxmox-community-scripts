@@ -154,9 +154,10 @@ func (r *GuestResource) Create(ctx context.Context, req resource.CreateRequest, 
 		resp.Diagnostics.AddError("Invalid settings", e.Error())
 		return
 	}
-	if m.Kind.ValueString()=="vm" {
-		if _,ok:=settings["disk_size"];ok && (m.DiskKey.IsNull()||m.DiskKey.ValueString()=="") {
-			resp.Diagnostics.AddError("VM disk identity required","Set disk_key to the exact existing VM disk slot if managing disk_size; the provider never guesses which disk to grow.");return
+	if m.Kind.ValueString() == "vm" {
+		if _, ok := settings["disk_size"]; ok && (m.DiskKey.IsNull() || m.DiskKey.ValueString() == "") {
+			resp.Diagnostics.AddError("VM disk identity required", "Set disk_key to the exact existing VM disk slot if managing disk_size; the provider never guesses which disk to grow.")
+			return
 		}
 	}
 	_, e = r.runtime.SSH.Run(ctx, runner.Request{Action: "create", Node: m.Node.ValueString(), Kind: m.Kind.ValueString(), VMID: m.VMID.ValueInt64(), Script: m.Script.ValueString(), ScriptsRef: m.ScriptsRef.ValueString(), CoreRef: m.CoreRef.ValueString(), Settings: settings, AcceptUnverified: true})
