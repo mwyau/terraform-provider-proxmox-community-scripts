@@ -14,8 +14,10 @@ jobs:
           go-version: '1.23.7'
       - name: Resolve modules
         run: go mod tidy
-      - name: Format working tree (initial bootstrap)
-        run: gofmt -w main.go internal/
+      - name: Check Go formatting
+        run: test -z "$(gofmt -l main.go internal/)"
+      - name: Verify dependency checksums
+        run: git diff --exit-code -- go.mod go.sum
       - name: Vet
         run: go vet ./...
       - name: Test
@@ -23,25 +25,3 @@ jobs:
       - name: Build
         run: go build ./...
 
-  normalize-once:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/feat/go-provider-foundation'
-    permissions:
-      contents: write
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.23.7'
-      - name: Normalize Go source and resolve checksums
-        run: |
-          go mod tidy
-          gofmt -w main.go internal/
-          git add go.mod go.sum main.go internal/
-          if git diff --cached --quiet; then
-            exit 0
-          fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'Format Go source and record dependency checksums'
-          git push origin HEAD:feat/go-provider-foundation
