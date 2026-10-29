@@ -53,6 +53,7 @@ func valid(r Request) error {
  if (r.Action=="create"||r.Action=="update") && (!shaRE.MatchString(r.ScriptsRef)|| (r.Action=="create"&&!shaRE.MatchString(r.CoreRef))) {return errors.New("immutable full source SHA required")}
  for k,v:=range r.Settings{
   if !simpleRE.MatchString(k)||len(v)>1024||strings.ContainsAny(v,"\x00\r\n"){return fmt.Errorf("unsafe setting %q",k)}
+  if _,ok:=map[string]bool{"cores":true,"memory":true,"disk_size":true,"hostname":true,"bridge":true,"storage":true,"vlan":true}[k];!ok{return fmt.Errorf("unsupported normalized creation setting %q",k)}
  }
  if r.Action=="create" && !r.AcceptUnverified {return errors.New("creation requires explicit accept_unverified approval")}
  if r.Action=="update" && (r.Kind!="lxc"||!simpleRE.MatchString(r.UpdateRequestID)||!simpleRE.MatchString(r.BackupStorage)) {return errors.New("LXC update requires request ID and backup storage")}
@@ -206,7 +207,14 @@ func (r *Runner) create(ctx context.Context,req Request)(Result,error) {
   argv=[]string{filepath.Join(scripts,"vm",req.Script+".sh")}
   env["VM_VMID"]=fmt.Sprint(req.VMID);env["VM_UNATTENDED"]="1"
  }
- for k,v:=range req.Settings {env[k]=v}
+ for k,v:=range req.Settings {
+  lxcMap:=map[string]string{"cores":"var_cpu","memory":"var_ram","disk_size":"var_disk","hostname":"var_hostname","bridge":"var_brg","storage":"var_container_storage","vlan":"var_vlan"}
+  vmMap:=map[string]string{"cores":"VM_CORES","memory":"VM_RAM","disk_size":"VM_DISK_SIZE","hostname":"VM_HOSTNAME","bridge":"VM_BRIDGE","storage":"VM_STORAGE","vlan":"VM_VLAN"}
+  key:=lxcMap[k];if req.Kind=="vm"{key=vmMap[k]}
+  if key==""{return fail(fmt.Errorf("unsupported Core setting %q",k))}
+  if k=="disk_size"&&req.Kind=="vm"{v+="G"}
+  env[key]=v
+ }
  if _,e=r.System.Run(ctx,"bash",argv,env);e!=nil{return fail(e)}
  g,found,e:=r.check(ctx,req);if e!=nil{return fail(e)}
  if !found||g.Node!=req.Node{return fail(errors.New("installer did not create expected VMID on expected node"))}
@@ -219,7 +227,7 @@ func (r *Runner) update(ctx context.Context,req Request)(Result,error){
  path:=r.updatePath(req)
  j,exists,e:=readJournal(path);if e!=nil{return Result{},e}
  if exists{
-  if j.Phase=="verified" && j.Request.VMID==req.VMID && j.Request.Script==req.Script {return Result{Status:"already-applied",Journal:path},nil}
+  if j.Phase=="verified" && j.Request.VMID==req.VMID && j.Request.Script==req.Script && j.Request.ScriptsRef==req.ScriptsRef && j.Request.BackupStorage==req.BackupStorage {return Result{Status:"already-applied",Journal:path},nil}
   return Result{},errors.New("prior uncertain update journal; manual recovery required")
  }
  g,e:=r.requireGuest(ctx,req);if e!=nil{return Result{},e}
