@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/mwyau/terraform-provider-proxmox-community-scripts/internal/contract"
 	"github.com/mwyau/terraform-provider-proxmox-community-scripts/internal/proxmox"
 	"github.com/mwyau/terraform-provider-proxmox-community-scripts/internal/recovery"
 	"github.com/mwyau/terraform-provider-proxmox-community-scripts/internal/runner"
@@ -39,6 +40,8 @@ func (r *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 			"core_ref":                  schema.StringAttribute{Optional: true, MarkdownDescription: "Immutable 40-char Core commit used only at creation."},
 			"disk_key":                  schema.StringAttribute{Optional: true, MarkdownDescription: "Existing disk to grow: rootfs for LXC; explicit scsiN/virtioN/sataN/ideN for VM. Never creates or moves disks."},
 			"settings":                  schema.MapAttribute{ElementType: types.StringType, Optional: true, MarkdownDescription: "Creation settings (cores,memory,disk_size,hostname,bridge,vlan,storage) mapped to the upstream Core variables. Only cores/memory can be changed in-place."},
+			"guest_defaults": schema.MapAttribute{ElementType: types.MapType{ElemType:types.StringType},Optional:true,MarkdownDescription:"Creation-only layered defaults (all, lxc, vm). Precedence: settings > matching kind > all > upstream script defaults."},
+			"script_vars": schema.MapAttribute{ElementType:types.StringType,Optional:true,Sensitive:true,MarkdownDescription:"Creation-only app-specific environment variables. Protected names and normalized Core fields cannot be overridden; values remain in Terraform state."},
 			"accept_unverified_install": schema.BoolAttribute{Optional: true, MarkdownDescription: "Explicit high-risk approval for running unverified root installation code."},
 			"allow_hardware_updates":    schema.BoolAttribute{Optional: true, MarkdownDescription: "Allow explicitly requested in-place CPU/memory changes."},
 			"update_request_id":         schema.StringAttribute{Optional: true, MarkdownDescription: "An explicit unique request ID for a single LXC software update. Change it to request the next update."},
@@ -60,6 +63,8 @@ type guestModel struct {
 	ScriptsRef           types.String `tfsdk:"scripts_ref"`
 	CoreRef              types.String `tfsdk:"core_ref"`
 	Settings             types.Map    `tfsdk:"settings"`
+	GuestDefaults        types.Map    `tfsdk:"guest_defaults"`
+	ScriptVars           types.Map    `tfsdk:"script_vars"`
 	DiskKey              types.String `tfsdk:"disk_key"`
 	Accept               types.Bool   `tfsdk:"accept_unverified_install"`
 	Hardware             types.Bool   `tfsdk:"allow_hardware_updates"`
@@ -97,6 +102,25 @@ func (m guestModel) options(ctx context.Context) (map[string]string, error) {
 		return nil, fmt.Errorf("invalid settings: %s", ds.Errors()[0].Summary())
 	}
 	return values, nil
+}
+func (m guestModel) creationOptions(ctx context.Context)(map[string]string,map[string]string,error){
+ settings,e:=m.options(ctx);if e!=nil{return nil,nil,e}
+ defaults:=map[string]map[string]string{}
+ if !m.GuestDefaults.IsNull(){
+  if m.GuestDefaults.IsUnknown(){return nil,nil,fmt.Errorf("guest_defaults must be known for creation")}
+  diags:=m.GuestDefaults.ElementsAs(ctx,&defaults,false)
+  if diags.HasError(){return nil,nil,fmt.Errorf("invalid guest_defaults: %s",diags.Errors()[0].Summary())}
+ }
+ effective,e:=contract.ResolveDefaults(m.Kind.ValueString(),defaults,settings)
+ if e!=nil{return nil,nil,e}
+ vars:=map[string]string{}
+ if !m.ScriptVars.IsNull(){
+  if m.ScriptVars.IsUnknown(){return nil,nil,fmt.Errorf("script_vars must be known for creation")}
+  diags:=m.ScriptVars.ElementsAs(ctx,&vars,false)
+  if diags.HasError(){return nil,nil,fmt.Errorf("invalid script_vars: %s",diags.Errors()[0].Summary())}
+ }
+ if e=contract.ScriptVars(vars);e!=nil{return nil,nil,e}
+ return effective,vars,nil
 }
 func (m guestModel) validate() error {
 	if m.Node.IsNull() || m.Kind.IsNull() || m.Script.IsNull() || m.VMID.IsNull() {
@@ -149,7 +173,7 @@ func (r *GuestResource) Create(ctx context.Context, req resource.CreateRequest, 
 		resp.Diagnostics.AddError("VMID collision", "A guest already exists under this VMID; explicitly import it instead of rerunning the installer.")
 		return
 	}
-	settings, e := m.options(ctx)
+	settings, vars, e := m.creationOptions(ctx)
 	if e != nil {
 		resp.Diagnostics.AddError("Invalid settings", e.Error())
 		return
@@ -160,7 +184,7 @@ func (r *GuestResource) Create(ctx context.Context, req resource.CreateRequest, 
 			return
 		}
 	}
-	_, e = r.runtime.SSH.Run(ctx, runner.Request{Action: "create", Node: m.Node.ValueString(), Kind: m.Kind.ValueString(), VMID: m.VMID.ValueInt64(), Script: m.Script.ValueString(), ScriptsRef: m.ScriptsRef.ValueString(), CoreRef: m.CoreRef.ValueString(), Settings: settings, AcceptUnverified: true})
+	_, e = r.runtime.SSH.Run(ctx, runner.Request{Action: "create", Node: m.Node.ValueString(), Kind: m.Kind.ValueString(), VMID: m.VMID.ValueInt64(), Script: m.Script.ValueString(), ScriptsRef: m.ScriptsRef.ValueString(), CoreRef: m.CoreRef.ValueString(), Settings: settings, ScriptVars: vars, AcceptUnverified: true})
 	if e != nil {
 		resp.Diagnostics.AddError("Creation uncertain", e.Error()+"; "+recovery.RecoveryHint(m.id()))
 		return
@@ -280,8 +304,8 @@ func (r *GuestResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		resp.Diagnostics.AddError("Invalid guest", e.Error())
 		return
 	}
-	if old.Kind != plan.Kind || old.VMID != plan.VMID || old.Node != plan.Node || old.Script != plan.Script || old.ScriptsRef != plan.ScriptsRef || old.CoreRef != plan.CoreRef || old.DiskKey != plan.DiskKey {
-		resp.Diagnostics.AddError("Immutable guest identity/source", "Changing node, VMID, kind, script, disk key, or installation refs is not supported. Import or use an explicit migration plan.")
+	if old.Kind != plan.Kind || old.VMID != plan.VMID || old.Node != plan.Node || old.Script != plan.Script || old.ScriptsRef != plan.ScriptsRef || old.CoreRef != plan.CoreRef || old.DiskKey != plan.DiskKey || !old.ScriptVars.Equal(plan.ScriptVars) {
+		resp.Diagnostics.AddError("Immutable guest identity/source", "Changing node, VMID, kind, script_vars, disk key, or installation refs is not supported. Import or use an explicit migration plan.")
 		return
 	}
 	g, found, e := r.runtime.API.FindGuest(ctx, plan.VMID.ValueInt64())
