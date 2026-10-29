@@ -1,6 +1,6 @@
 # Community Scripts compatibility and shared variable contract
 
-Last audit: 2026-10-29. Terraform branch `feat/go-provider-foundation`; Ansible branch `feat/collection-foundation` at `3797a68`.
+Last audit: 2026-10-29. Terraform branch `feat/go-provider-foundation`; Ansible branch `feat/collection-foundation` with canonical `contracts/guest.v1.json`.
 
 ## What Terraform plan verifies
 
@@ -45,8 +45,9 @@ Terraform's plan-time inspector is deliberately narrower than the repository-wid
 | `api_token_id`, `api_token_secret` | Same | API credentials |
 | `validate_certs` | Same | Defaults to true; no inverse alias |
 | `kind`, `script`, `node` | Same | Guest type, script slug, chosen PVE node |
-| `ctid` (LXC) / `vmid` (VM) | `vmid` (both) | Canonical cluster-wide guest identity, not two independent IDs |
+| `vmid` (both LXC and VM) | Same | Cluster-global guest identity; upstream LXC Core internally consumes `var_ctid` |
 | `scripts_ref`, `core_ref` | Same | Full immutable Git SHAs for creation |
+| `update_scripts_ref` | Same | Separate immutable source revision for application software-update requests |
 | `settings` | Same | Creation settings and explicit supported compute/disk updates |
 | `guest_defaults.all/lxc/vm` | Same | Applied **only at Create**, not reconciled into existing guests |
 | `script_vars` | Same | At most 64, 32 KiB; arbitrary valid app env names excluding protected/normalized Core names |
@@ -70,7 +71,7 @@ and the 14 VM keys:
 
 `cores memory disk_size hostname bridge vlan storage mac mtu cpu_type machine start disk_cache timezone`
 
-to the Ansible Core environment mappings in `internal/contract/contract.go`. Every field has a representative conversion and validation test. `scripts/check_ansible_contract.py` parses both source maps (without importing external Python) and fails CI if a name or Core variable changes on the Ansible feature branch.
+to the Ansible Core environment mappings in `internal/contract/contract.go`. The canonical versioned specification is `contracts/guest.v1.json`, authored in the Ansible repository and copied here. `scripts/check_ansible_contract.py` verifies the JSON copies, both source maps, both public schemas and the absence of temporary aliases on every Terraform CI run. Conversions also have shared golden tests.
 
 Important conversions:
 - LXC `privileged=true` means `var_unprivileged=0`; false means 1.

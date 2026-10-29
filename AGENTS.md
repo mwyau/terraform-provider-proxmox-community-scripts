@@ -36,3 +36,9 @@ Goal: manage Proxmox Community Scripts LXC/VM guests natively through Terraform/
 - Continue in `feat/go-provider-foundation`; do not overwrite or force-push existing work.
 - Commit small batches with test results and track any unsupported/untested scenarios.
 - Do not change the default branch without an explicit request.
+
+## Canonical contract and no aliases
+- The single versioned public schema is `contracts/guest.v1.json` in the Ansible repo, mirrored here. `scripts/check_ansible_contract.py` verifies both JSON copies and the exposed Python/Go field maps and public names on CI; breaking changes require a new contract version and coordinated PRs.
+- The only canonical Proxmox API endpoint parameter is `api_host`; never reintroduce `endpoint`, `insecure`, or `backup_storage` aliases. Use `validate_certs` and `update_backup_storage` exclusively.
+- Share `vmid` for LXC and VM. The lower-level Core `var_ctid` is not a public alias. Separately pin `scripts_ref` for installation and `update_scripts_ref` for updates.
+- Never use both engines to manage the same VMID's guest lifecycle/hardware. For Terraform-owned VMIDs, Ansible is read-only or in-guest/disjoint automation only. Explicitly document any handoff.

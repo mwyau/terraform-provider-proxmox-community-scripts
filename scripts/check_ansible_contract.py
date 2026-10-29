@@ -1,64 +1,79 @@
 #!/usr/bin/env python3
-"""Read-only contract drift check against the Ansible feature branch.
+"""Fail closed when the local Go Terraform contract diverges from Ansible.
 
-Only source text is parsed; the external Python file is never imported/executed.
+Canonical artifact: ansible-proxmox-community-scripts/contracts/guest.v1.json.
+Read-only fetch. No remote code is imported or executed.
 """
 import argparse
 import ast
+import json
 import re
 import urllib.request
 from pathlib import Path
 
-ANSIBLE_URL = (
-    "https://raw.githubusercontent.com/mwyau/"
-    "ansible-proxmox-community-scripts/{ref}/plugins/module_utils/deployment.py"
-)
-
-def ansible_maps(text: str) -> dict[str, dict[str, str]]:
-    module = ast.parse(text)
-    result = {}
-    for stmt in module.body:
-        if isinstance(stmt, ast.Assign):
-            for target in stmt.targets:
-                if isinstance(target, ast.Name) and target.id in ("LXC_FIELDS", "VM_FIELDS"):
-                    result[target.id] = ast.literal_eval(stmt.value)
-    if set(result) != {"LXC_FIELDS", "VM_FIELDS"}:
-        raise ValueError("Ansible field maps are unavailable")
-    return result
-
-def go_maps(text: str) -> dict[str, dict[str, str]]:
-    result = {}
-    for go_name, ansible_name in (("LXCFields", "LXC_FIELDS"), ("VMFields", "VM_FIELDS")):
-        match = re.search(r"var\s+"+go_name+r"\s*=\s*map\[string\]string\s*\{(.*?)\n\}", text, re.S)
-        if match is None:
-            raise ValueError(f"Go field map {go_name} unavailable")
-        result[ansible_name] = dict(re.findall(r'"([^"]+)"\s*:\s*"([^"]+)"', match.group(1)))
-    return result
-
+ROOT=Path(__file__).resolve().parents[1]
+ANSIBLE_ROOT="https://raw.githubusercontent.com/mwyau/ansible-proxmox-community-scripts/{ref}"
+def retrieve(ref,path):
+    if not re.fullmatch(r"[A-Za-z0-9._/-]+",ref) or ".." in ref:
+        raise ValueError("invalid Ansible ref")
+    uri=ANSIBLE_ROOT.format(ref=ref)+"/"+path
+    req=urllib.request.Request(uri,headers={"User-Agent":"communityscripts-contract-ci"})
+    with urllib.request.urlopen(req,timeout=20) as resp:
+        data=resp.read(1_000_001)
+    if len(data)>1_000_000:
+        raise ValueError("source larger than 1 MB")
+    return data.decode("utf-8")
+def python_maps(source):
+    tree=ast.parse(source)
+    maps={}
+    for node in tree.body:
+        if isinstance(node,ast.Assign):
+            for name in node.targets:
+                if isinstance(name,ast.Name) and name.id in ("LXC_FIELDS","VM_FIELDS"):
+                    maps[name.id]=ast.literal_eval(node.value)
+    if set(maps)!={"LXC_FIELDS","VM_FIELDS"}:
+        raise ValueError("missing Ansible field mappings")
+    return maps
+def go_maps(source):
+    mappings={}
+    for go,key in (("LXCFields","lxc_fields"),("VMFields","vm_fields")):
+        match=re.search(r"var\s+"+go+r"\s*=\s*map\[string\]string\s*\{(.*?)\n\}",source,re.S)
+        if not match:raise ValueError("missing Go map "+go)
+        mappings[key]=dict(re.findall(r'"([^"]+)"\s*:\s*"([^"]+)"',match.group(1)))
+    return mappings
+def exposed_keys(source):
+    return {m[1] for m in re.finditer(r'^([a-z_][a-z0-9_]*):',source,re.M)}
+def schema_keys(source):
+    return set(re.findall(r'^\s*"([a-z_][a-z0-9_]*)":\s+schema\.',source,re.M))
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--ansible-ref", default="feat/collection-foundation")
-    parser.add_argument("--ansible-file", type=Path, help="Offline fixture instead of network request")
-    args = parser.parse_args()
-    if args.ansible_file:
-        source = args.ansible_file.read_text()
-    else:
-        url=ANSIBLE_URL.format(ref=args.ansible_ref)
-        request=urllib.request.Request(url,headers={"User-Agent":"terraform-community-scripts-contract-check"})
-        with urllib.request.urlopen(request,timeout=20) as response:
-            source=response.read(1_000_001).decode("utf-8")
-        if len(source)>1_000_000:
-            raise ValueError("Unexpected large Ansible source")
-    desired=ansible_maps(source)
-    current=go_maps(Path("internal/contract/contract.go").read_text())
-    if desired!=current:
-        for key in sorted(desired):
-            missing={k:v for k,v in desired[key].items() if current.get(key,{}).get(k)!=v}
-            extra={k:v for k,v in current.get(key,{}).items() if k not in desired[key]}
-            print(f"{key}: missing/changed={missing}; unexpected={extra}")
-        raise SystemExit("Go and Ansible normalized field maps differ")
-    print("Normalized mappings match Ansible:", len(current["LXC_FIELDS"]), "LXC and",
-          len(current["VM_FIELDS"]), "VM fields")
-
+    ap=argparse.ArgumentParser()
+    ap.add_argument("--ansible-ref",default="feat/collection-foundation")
+    a=ap.parse_args()
+    canonical=json.loads((ROOT/"contracts/guest.v1.json").read_text())
+    upstream=json.loads(retrieve(a.ansible_ref,"contracts/guest.v1.json"))
+    if upstream!=canonical:
+        raise SystemExit("Shared contract differs from Ansible. Update both repos in coordinated PRs.")
+    py=python_maps(retrieve(a.ansible_ref,"plugins/module_utils/deployment.py"))
+    actual=go_maps((ROOT/"internal/contract/contract.go").read_text())
+    if (py["LXC_FIELDS"]!=canonical["lxc_fields"] or
+        py["VM_FIELDS"]!=canonical["vm_fields"] or
+        actual["lxc_fields"]!=canonical["lxc_fields"] or
+        actual["vm_fields"]!=canonical["vm_fields"]):
+        raise SystemExit("Python or Go mapping differs from normative versioned contract")
+    provider=(ROOT/"internal/provider/provider.go").read_text()
+    resource=(ROOT/"internal/provider/guest_resource.go").read_text()
+    go_keys=schema_keys(provider)|schema_keys(resource)
+    expected=set(canonical["common_inputs"])
+    if not expected.issubset(go_keys):
+        raise SystemExit("Terraform schema missing canonical inputs: "+str(sorted(expected-go_keys)))
+    if re.search(r'^\s*"(?:endpoint|insecure|backup_storage)":\s+schema\.',provider+"\n"+resource,re.M):
+        raise SystemExit("Legacy Terraform alias was reintroduced")
+    ansible_defaults=retrieve(a.ansible_ref,"roles/application/defaults/main.yml")
+    ansible_keys=exposed_keys(ansible_defaults)
+    if not expected.issubset(ansible_keys):
+        raise SystemExit("Ansible facade missing inputs: "+str(sorted(expected-ansible_keys)))
+    if "ctid" in ansible_keys:
+        raise SystemExit("Legacy Ansible CTID alias was reintroduced")
+    print("Shared v1 contract parity: 34 LXC, 14 VM; both public facades; no aliases.")
 if __name__=="__main__":
     main()

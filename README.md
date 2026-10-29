@@ -72,14 +72,20 @@ Creation requires `scripts_ref`, `core_ref`, `accept_unverified_install=true`, a
 
 **In-place hardware:** change only `settings.cores`, `settings.memory`, or grow `settings.disk_size`, with `allow_hardware_updates=true`. For LXC disk growth, `disk_key` defaults to `rootfs`; for VM disks supply the exact existing `scsiN`, `virtioN`, `sataN`, or `ideN` key. No disk creation/shrink/move is supported. CPU/memory changes may remain pending until restart.
 
-**Application updates:** after initial create, set or change `update_request_id` together with a pinned `update_scripts_ref` and `update_backup_storage` (legacy alias `backup_storage`). A host journal prevents executing the same successful request ID twice. This is **request-level** idempotency, not an application-version detector. The updater can still change hardware, fail partially, or have other side effects; verify the guest after each update. VM application updates are not supported.
+**Application updates:** after initial create, set or change `update_request_id` together with a pinned `update_scripts_ref` and `update_backup_storage`. A host journal prevents executing the same successful request ID twice. This is **request-level** idempotency, not an application-version detector. The updater can still change hardware, fail partially, or have other side effects; verify the guest after each update. VM application updates are not supported.
 
 **Destroy:** omit `deletion_policy` (or use `retain`) to remove Terraform tracking without deleting the guest. For actual deletion set `deletion_policy="delete"` and `confirm_destroy=true`, apply those settings first, stop the guest yourself, then plan destroy. A guest imported without a verified creation journal additionally requires `allow_imported_destroy=true`. The host runner's durable journal prevents auto-destroy of uncertain partial creation. Never use destructive replacement to fix an identity conflict.
 
 ## Testing and status
 
-GitHub Actions checks the Ansible mapping for drift, compiles and tests Go with race detection, validates the Terraform provider schema, and runs a real **read-only Terraform plan** against pinned source files. It does not execute Community Scripts or mutate Proxmox. Formatting normalization is used only during feature development. Tests cover successful/failed creation, journal replay, race-relevant collisions, extra VMIDs, LXC updater evidence, application update replay, identity conflict, retain/delete guards, and disk growth safety.
+GitHub Actions checks the versioned Ansible contract and both public interfaces for drift, compiles and tests Go with race detection, validates the Terraform provider schema, and runs a real **read-only Terraform plan** against pinned source files. It does not execute Community Scripts or mutate Proxmox. Strict committed formatting is required. Tests cover successful/failed creation, journal replay, race-relevant collisions, extra VMIDs, LXC updater evidence, application update replay, identity conflict, retain/delete guards, and disk growth safety.
 
 **Known gaps / release blockers:** live PVE 8/9 testing (LXC + VM, stopped/running, bridge/VLAN/storage, source compatibility), robust cluster-wide coordinator enforcement, installer cancellation behavior, source retirement detection, and release packaging/signing. Until these are addressed, use disposable hosts only.
 
 MIT licensed. Not affiliated with Proxmox Server Solutions or Community Scripts maintainers.
+
+## Contract synchronization and division of ownership
+
+The canonical `contracts/guest.v1.json` lives in the Ansible repository; an identical copy is committed here. CI fails if the versions, normalized mappings (34 LXC / 14 VM), public input names or supported conversion fixtures diverge. Make interface changes in a coordinated pair of PRs, updating both implementations and tests; bump the contract version for breaking changes. Do **not** add deprecated or compatibility aliases. The versioned contract is a shared schema, not shared runtime state.
+
+For a VMID declared in Terraform, use Terraform for create, hardware changes, updates and destroy. Use Ansible for disjoint in-guest configuration (including its guest SSH connection), inspection, or separately owned PVE host services; do not also use Ansible `action: present/reconcile/update` on the same VMID. Ownership transfer is explicit import/removal, never duplicate state management. See [docs/OWNERSHIP.md](docs/OWNERSHIP.md).
