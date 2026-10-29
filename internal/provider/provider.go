@@ -35,7 +35,7 @@ func (p *CommunityScriptsProvider) Schema(_ context.Context, _ provider.SchemaRe
 }
 
 type config struct {
-	Host types.String `tfsdk:"api_host"`
+	Host     types.String `tfsdk:"api_host"`
 	ID       types.String `tfsdk:"api_token_id"`
 	Secret   types.String `tfsdk:"api_token_secret"`
 	Validate types.Bool   `tfsdk:"validate_certs"`

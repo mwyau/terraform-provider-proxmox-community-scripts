@@ -54,6 +54,8 @@ func TestCreationOptionsMatchAnsiblePrecedence(t *testing.T) {
 }
 
 func TestCanonicalUpdateBackupStorage(t *testing.T) {
- m:=guestModel{UpdateBackup:types.StringValue("backup")}
- if m.UpdateBackup.ValueString()!="backup"{t.Fatal("update backup storage not persisted")}
+	m := guestModel{UpdateBackup: types.StringValue("backup")}
+	if m.UpdateBackup.ValueString() != "backup" {
+		t.Fatal("update backup storage not persisted")
+	}
 }
