@@ -35,3 +35,29 @@ func TestDefaultsPrecedence(t *testing.T){
  want:=map[string]string{"cores":"4","memory":"2048"}
  if !reflect.DeepEqual(got,want){t.Fatalf("defaults=%v",got)}
 }
+
+func TestAllAnsibleFieldsReachRawCoreEnvironment(t *testing.T) {
+ lxc:=map[string]string{
+  "cores":"2","memory":"2048","disk_size":"8","hostname":"my-lxc","bridge":"vmbr0","vlan":"30",
+  "storage":"local-lvm","template_storage":"local","os":"debian","os_version":"13",
+  "privileged":"false","ipv4":"192.0.2.10/24","gateway":"192.0.2.1","ipv6_method":"auto",
+  "mac":"02:00:00:00:00:01","mtu":"1500","dns":"1.1.1.1","searchdomain":"example.test",
+  "timezone":"America/New_York","tags":"lab","protection":"true","nesting":"1","tun":"yes",
+  "fuse":"false","keyctl":"0","gpu":"false","mknod":"1","mount_fs":"nfs,cifs",
+  "apt_cacher":"false","apt_cacher_ip":"proxy.local:3142","inherit_host_ca":"true",
+  "sdn_vnet":"vnet1","http_proxy":"http://proxy.example:3128","http_no_proxy":"localhost,127.0.0.1",
+ }
+ vm:=map[string]string{
+  "cores":"2","memory":"2048","disk_size":"8","hostname":"testvm","bridge":"vmbr0","vlan":"30",
+  "storage":"local-lvm","mac":"02:00:00:00:00:02","mtu":"1500","cpu_type":"host",
+  "machine":"q35","start":"false","disk_cache":"none","timezone":"America/New_York",
+ }
+ for _,c:=range []struct{kind string; settings map[string]string; names map[string]string}{
+ {"lxc",lxc,LXCFields},{"vm",vm,VMFields},
+ }{
+  if len(c.settings)!=len(c.names){t.Fatalf("%s fixture covers %d of %d",c.kind,len(c.settings),len(c.names))}
+  env,e:=Environment(c.kind,c.settings,map[string]string{"APP_OPTION":"enabled"});if e!=nil{t.Fatalf("%s: %v",c.kind,e)}
+  if len(env)!=len(c.names)+1{t.Fatalf("%s mapping lost field: %v",c.kind,env)}
+  for k,v:=range c.names{if _,found:=env[v];!found{t.Errorf("%s key %s => %s not emitted",c.kind,k,v)}}
+ }
+}
