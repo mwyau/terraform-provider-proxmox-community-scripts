@@ -15,7 +15,9 @@ import (
 )
 
 func main() {
-	if os.Geteuid() != 0 {
+	// Do not resolve commands from an SSH-provided or user-controlled PATH.
+ os.Setenv("PATH", "/usr/sbin:/usr/bin:/sbin:/bin")
+ if os.Geteuid() != 0 {
 		fmt.Fprintln(os.Stderr, "root required")
 		os.Exit(1)
 	}

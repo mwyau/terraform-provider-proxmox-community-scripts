@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"os"
 	"os/exec"
 	"strings"
 )
@@ -23,8 +22,13 @@ func (w boundedWriter) Write(p []byte) (int, error) {
 	return w.b.Write(p)
 }
 func (ExecSystem) Run(ctx context.Context, name string, args []string, env map[string]string) (string, error) {
-	cmd := exec.CommandContext(ctx, name, args...)
-	cmd.Env = os.Environ()
+	switch name {
+ case "pvesh","git","bash","pct","qm":
+ default:
+  return "",errors.New("unexpected executable in privileged host runner")
+ }
+ cmd := exec.CommandContext(ctx, name, args...)
+ cmd.Env = []string{"PATH=/usr/sbin:/usr/bin:/sbin:/bin", "HOME=/root", "LANG=C.UTF-8"}
 	for k, v := range env {
 		if k == "" || strings.ContainsAny(k, "=\x00") || strings.ContainsRune(v, '\x00') {
 			return "", errors.New("invalid environment")
