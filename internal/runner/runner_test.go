@@ -22,6 +22,7 @@ type fakePVE struct{
  updates int
  failScript bool
  failFetch bool
+ extraID bool
  lastEnv map[string]string
 }
 func(f *fakePVE) Run(_ context.Context,name string,args []string,env map[string]string)(string,error){
@@ -30,7 +31,9 @@ func(f *fakePVE) Run(_ context.Context,name string,args []string,env map[string]
   if args[1]=="/cluster/resources" {
    if !f.exists{return "[]",nil}
    kind:=f.kind;if kind=="vm"{kind="qemu"}
-   b,_:=json.Marshal([]map[string]any{{"vmid":120,"node":f.node,"type":kind}});return string(b),nil
+   list:=[]map[string]any{{"vmid":120,"node":f.node,"type":kind}}
+   if f.extraID&&f.creates>0{list=append(list,map[string]any{"vmid":121,"node":f.node,"type":"lxc"})}
+   b,_:=json.Marshal(list);return string(b),nil
   }
   if strings.HasSuffix(args[1],"/config"){
    return fmt.Sprintf(`{"description":"https://community-scripts.org/scripts/%s"}`,f.script),nil
@@ -146,4 +149,23 @@ func TestForeignNodeRefused(t *testing.T){
  r,f:=newFake(t);req:=request("create");req.Node="pve2"
  if _,e:=r.Handle(context.Background(),req);e==nil{t.Fatal("other node accepted")}
  if f.creates!=0{t.Fatal("ran installer on other node")}
+}
+
+func TestUnexpectedAdditionalVMIDUncertain(t *testing.T){
+ r,f:=newFake(t);f.extraID=true
+ q:=request("create")
+ if _,e:=r.Handle(context.Background(),q);e==nil{t.Fatal("unexpected extra VMID was accepted")}
+ j,_,_:=readJournal(r.journalPath(q))
+ if j.Phase!="uncertain"{t.Fatalf("phase %q",j.Phase)}
+ if _,e:=r.Handle(context.Background(),q);e==nil{t.Fatal("unsafe replay")}
+}
+func TestMalformedNormalizedSettings(t *testing.T){
+ for _,opts:=range []map[string]string{
+  {"cores":"0"},{"cores":"256"},{"memory":"1"},{"disk_size":"-1"},
+  {"vlan":"4095"},{"bridge":"vmbr0;reboot"},{"storage":"/tmp/x"},
+  {"memory":"2048x"},{"hostname":"foo bar"},
+ }{
+  q:=request("create");q.Settings=opts
+  if e:=valid(q);e==nil{t.Errorf("accepted settings %v",opts)}
+ }
 }
