@@ -67,7 +67,7 @@ An LXC creation requires `scripts_ref`, `core_ref`, `accept_unverified_install=t
 
 ## Testing and status
 
-GitHub Actions runs gofmt (temporary development normalization), `go vet`, `go test -race`, and `go build` against local fake APIs and host process adapters; it never executes Community Scripts. Tests cover successful/failed creation, journal replay, race-relevant collisions, extra VMIDs, LXC updater evidence, application update replay, identity conflict, retain/delete guards, and disk growth safety.
+GitHub Actions enforces committed Go formatting, dependency checksums, `go vet`, `go test -race`, `go build`, and Terraform HCL/provider-schema validation against local mock APIs and a locally built development provider; it never executes Community Scripts. Tests cover successful/failed creation, journal replay, race-relevant collisions, extra VMIDs, LXC updater evidence, application update replay, identity conflict, retain/delete guards, and disk growth safety.
 
 **Known gaps / release blockers:** live PVE 8/9 testing (LXC + VM, stopped/running, bridge/VLAN/storage, source compatibility), robust cluster-wide coordinator enforcement, installer cancellation behavior, source retirement detection, and release packaging/signing. Until these are addressed, use disposable hosts only.
 
