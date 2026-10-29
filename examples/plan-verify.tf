@@ -7,7 +7,7 @@ terraform {
   }
 }
 provider "communityscripts" {
-  endpoint         = "https://127.0.0.1:8006"
+  api_host = "https://127.0.0.1:8006"
   api_token_id     = "ci@pve!test"
   api_token_secret = "unused-for-plan"
 }

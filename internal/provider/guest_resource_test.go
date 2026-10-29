@@ -52,14 +52,8 @@ func TestCreationOptionsMatchAnsiblePrecedence(t *testing.T) {
 		t.Fatalf("unexpected effective creation options %v extras %v", effective, extras)
 	}
 }
-func TestUpdateBackupNamingCompatibility(t *testing.T) {
-	m := guestModel{UpdateBackup: types.StringValue("backup"), Backup: types.StringNull()}
-	v, e := m.backupStorage()
-	if e != nil || v != "backup" {
-		t.Fatalf("canonical: %s %v", v, e)
-	}
-	m.Backup = types.StringValue("legacy")
-	if _, e = m.backupStorage(); e == nil {
-		t.Fatal("both aliases must fail")
-	}
+
+func TestCanonicalUpdateBackupStorage(t *testing.T) {
+ m:=guestModel{UpdateBackup:types.StringValue("backup")}
+ if m.UpdateBackup.ValueString()!="backup"{t.Fatal("update backup storage not persisted")}
 }

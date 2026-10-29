@@ -21,7 +21,7 @@ variable "core_sha" {
   type = string
 }
 provider "communityscripts" {
-  endpoint         = "https://pve1.example.internal:8006"
+  api_host = "https://pve1.example.internal:8006"
   api_token_id     = var.api_token_id
   api_token_secret = var.api_token_secret
   ssh_target       = "automation@pve1.example.internal"

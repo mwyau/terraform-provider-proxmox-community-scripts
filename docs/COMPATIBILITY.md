@@ -41,9 +41,9 @@ Terraform's plan-time inspector is deliberately narrower than the repository-wid
 
 | Ansible collection | Terraform | Semantics |
 | --- | --- | --- |
-| `api_host` | `endpoint` | Proxmox HTTPS origin; provider convention differs |
+| `api_host` | Same | Proxmox HTTPS origin |
 | `api_token_id`, `api_token_secret` | Same | API credentials |
-| `validate_certs` | `validate_certs` | Defaults to true; `insecure` retained as legacy inverse alias; never set both |
+| `validate_certs` | Same | Defaults to true; no inverse alias |
 | `kind`, `script`, `node` | Same | Guest type, script slug, chosen PVE node |
 | `ctid` (LXC) / `vmid` (VM) | `vmid` (both) | Canonical cluster-wide guest identity, not two independent IDs |
 | `scripts_ref`, `core_ref` | Same | Full immutable Git SHAs for creation |
@@ -53,7 +53,7 @@ Terraform's plan-time inspector is deliberately narrower than the repository-wid
 | `accept_unverified_install` | Same | Approval to run third-party root scripts |
 | `disk_key` | Same | Disk chosen for grow-only operations |
 | `update_request_id` | Same | Explicit idempotency key |
-| `update_backup_storage` | Same | Canonical update backup storage; legacy `backup_storage` alias still accepted |
+| `update_backup_storage` | Same | Update backup storage; no alias |
 | `ssh`, `cloud_init` | Not yet available | Requires secure host key staging, per-image support and real integration tests |
 | `script_override` | Not yet available | Unsafe identity overrides are deliberately refused |
 | `update_apply`, `update_backup`, `update_accept_no_backup` | Not exposed | Terraform change to a request ID triggers update; backup storage is mandatory |

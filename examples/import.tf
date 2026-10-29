@@ -18,7 +18,7 @@ variable "proxmox_api_token_secret" {
 }
 
 provider "communityscripts" {
-  endpoint         = "https://pve.example.net:8006"
+  api_host = "https://pve.example.net:8006"
   api_token_id     = var.proxmox_api_token_id
   api_token_secret = var.proxmox_api_token_secret
 }
