@@ -9,6 +9,7 @@ import (
  "path/filepath"
  "strings"
  "testing"
+ "sync"
 )
 
 type fakePVE struct{
@@ -23,6 +24,7 @@ type fakePVE struct{
  failScript bool
  failFetch bool
  extraID bool
+ badPostflight bool
  lastEnv map[string]string
 }
 func(f *fakePVE) Run(_ context.Context,name string,args []string,env map[string]string)(string,error){
@@ -61,7 +63,7 @@ func(f *fakePVE) Run(_ context.Context,name string,args []string,env map[string]
   f.lastEnv=env
   if f.failScript {f.creates++;f.exists=true;return "",errors.New("interrupted installer")}
   if strings.HasSuffix(args[0],"update-apps.sh"){f.updates++;return "",nil}
-  f.creates++;f.exists=true;f.status="running";return "",nil
+  f.creates++;f.exists=true;f.status="running";if f.badPostflight {f.script="unexpected"};return "",nil
  }
  if name=="pct" {
   if args[0]=="exec"{return "export SCRIPT_SLUG=adguard\n",nil}
@@ -168,4 +170,27 @@ func TestMalformedNormalizedSettings(t *testing.T){
   q:=request("create");q.Settings=opts
   if e:=valid(q);e==nil{t.Errorf("accepted settings %v",opts)}
  }
+}
+
+func TestConcurrentCreatesSerialized(t *testing.T){
+ r,f:=newFake(t)
+ q:=request("create")
+ var wg sync.WaitGroup
+ errorsCh:=make(chan error,2)
+ for i:=0;i<2;i++ {
+  wg.Add(1)
+  go func(){defer wg.Done();_,e:=r.Handle(context.Background(),q);errorsCh<-e}()
+ }
+ wg.Wait();close(errorsCh)
+ success,fail:=0,0
+ for e:=range errorsCh {if e==nil{success++}else{fail++}}
+ if success!=1||fail!=1||f.creates!=1{t.Fatalf("success=%d fail=%d creates=%d",success,fail,f.creates)}
+}
+func TestInstallerSuccessWithoutMatchingProvenanceIsUncertain(t *testing.T){
+ r,f:=newFake(t);f.badPostflight=true
+ q:=request("create")
+ if _,e:=r.Handle(context.Background(),q);e==nil{t.Fatal("wrong postflight identity accepted")}
+ j,ok,e:=readJournal(r.journalPath(q))
+ if e!=nil||!ok||j.Phase!="uncertain"{t.Fatalf("journal %+v %v",j,e)}
+ if f.creates!=1{t.Fatalf("script count %d",f.creates)}
 }
