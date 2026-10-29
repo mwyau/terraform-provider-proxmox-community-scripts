@@ -61,7 +61,7 @@ func(f *fakePVE) Run(_ context.Context,name string,args []string,env map[string]
   f.creates++;f.exists=true;f.status="running";return "",nil
  }
  if name=="pct" {
-  if args[0]=="exec"{return "",nil}
+  if args[0]=="exec"{return "export SCRIPT_SLUG=adguard\n",nil}
   if args[0]=="destroy"{f.deletes++;f.exists=false;return "",nil}
  }
  if name=="qm"&&args[0]=="destroy"{f.deletes++;f.exists=false;return "",nil}
