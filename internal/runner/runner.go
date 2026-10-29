@@ -13,6 +13,7 @@ import (
  "path/filepath"
  "regexp"
  "strings"
+ "strconv"
  "syscall"
  "time"
 
@@ -53,7 +54,17 @@ func valid(r Request) error {
  if (r.Action=="create"||r.Action=="update") && (!shaRE.MatchString(r.ScriptsRef)|| (r.Action=="create"&&!shaRE.MatchString(r.CoreRef))) {return errors.New("immutable full source SHA required")}
  for k,v:=range r.Settings{
   if !simpleRE.MatchString(k)||len(v)>1024||strings.ContainsAny(v,"\x00\r\n"){return fmt.Errorf("unsafe setting %q",k)}
-  if _,ok:=map[string]bool{"cores":true,"memory":true,"disk_size":true,"hostname":true,"bridge":true,"storage":true,"vlan":true}[k];!ok{return fmt.Errorf("unsupported normalized creation setting %q",k)}
+  switch k {
+  case "cores","memory","disk_size","vlan":
+    if v==""||strings.Trim(v,"0123456789")!=""{return fmt.Errorf("setting %s must be an unsigned integer",k)}
+    n,e:=strconv.ParseInt(v,10,64)
+    if e!=nil|| k=="cores"&&(n<1||n>128) ||k=="memory"&&(n<256||n>1048576) ||
+       k=="disk_size"&&(n<1||n>100000)||k=="vlan"&&(n<1||n>4094) {return fmt.Errorf("invalid numeric setting %s",k)}
+  case "hostname","bridge","storage":
+    if !simpleRE.MatchString(v){return fmt.Errorf("invalid host/network/storage value for %s",k)}
+  default:
+    return fmt.Errorf("unsupported normalized creation setting %q",k)
+  }
  }
  if r.Action=="create" && !r.AcceptUnverified {return errors.New("creation requires explicit accept_unverified approval")}
  if r.Action=="update" && (r.Kind!="lxc"||!simpleRE.MatchString(r.UpdateRequestID)||!simpleRE.MatchString(r.BackupStorage)) {return errors.New("LXC update requires request ID and backup storage")}
@@ -180,6 +191,7 @@ func (r *Runner) create(ctx context.Context,req Request)(Result,error) {
  path:=r.journalPath(req)
  _,existing,e:=readJournal(path);if e!=nil{return Result{},e}
  if existing{return Result{},fmt.Errorf("prior journal for %s/%d exists; inspect and import, never repeat installation",req.Kind,req.VMID)}
+ before,e:=r.list(ctx);if e!=nil{return Result{},e}
  _,found,e:=r.check(ctx,req);if e!=nil{return Result{},e}
  if found{return Result{},errors.New("VMID already exists; explicit import required")}
  j,e:=newJournal(req);if e!=nil{return Result{},e}
@@ -216,6 +228,11 @@ func (r *Runner) create(ctx context.Context,req Request)(Result,error) {
   env[key]=v
  }
  if _,e=r.System.Run(ctx,"bash",argv,env);e!=nil{return fail(e)}
+ after,e:=r.list(ctx);if e!=nil{return fail(e)}
+ seen:=map[int64]bool{};for _,item:=range before{seen[item.VMID]=true}
+ for _,item:=range after{
+  if !seen[item.VMID]&&item.VMID!=req.VMID{return fail(fmt.Errorf("installer created unexpected VMID %d; inspect manually",item.VMID))}
+ }
  g,found,e:=r.check(ctx,req);if e!=nil{return fail(e)}
  if !found||g.Node!=req.Node{return fail(errors.New("installer did not create expected VMID on expected node"))}
  if e=proxmox.ValidateExpected(g,req.Kind,req.Script);e!=nil{return fail(e)}
