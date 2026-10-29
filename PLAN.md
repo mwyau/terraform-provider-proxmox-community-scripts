@@ -46,3 +46,6 @@ Branch: `feat/go-provider-foundation`. Source and tests are checked by GitHub Ac
 - [x] Versioned Ansible-owned `contracts/guest.v1.json` with Terraform mirror; CI compares public names and all 34/14 mappings. Breaking changes require version bump and coordinated PRs.
 - [ ] Enforce shared conversion fixtures across both languages in CI and block mismatched credential/guard semantics; increment contract schema for breaking changes.
 - [ ] Live-PVE ownership handoff tests: exported Terraform inventory to Ansible in-guest tasks, plus explicit import and state removal.
+
+## Public identity correction (2026-10-29)
+The shared contract requires `ctid` for LXC or `vmid` for VM, mutually exclusive. Terraform's computed `id` remains the type-qualified import/state identity. This supersedes the temporary common-vmid-for-both public model; internal PVE operations still take a normalized numeric VMID.

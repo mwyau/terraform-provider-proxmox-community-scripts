@@ -33,7 +33,8 @@ func (r *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 			"id":                        schema.StringAttribute{Computed: true, MarkdownDescription: "kind/vmid identity."},
 			"node":                      schema.StringAttribute{Required: true},
 			"kind":                      schema.StringAttribute{Required: true, MarkdownDescription: "lxc or vm"},
-			"vmid":                      schema.Int64Attribute{Required: true},
+			"ctid":                      schema.Int64Attribute{Optional: true, MarkdownDescription: "LXC container ID; required when kind=lxc and forbidden when kind=vm."},
+			"vmid":                      schema.Int64Attribute{Optional: true, MarkdownDescription: "VM ID; required when kind=vm and forbidden when kind=lxc."},
 			"script":                    schema.StringAttribute{Required: true},
 			"status":                    schema.StringAttribute{Computed: true},
 			"scripts_ref":               schema.StringAttribute{Optional: true, MarkdownDescription: "Immutable 40-char Community Scripts commit used only at creation."},
@@ -57,6 +58,7 @@ type guestModel struct {
 	ID                   types.String `tfsdk:"id"`
 	Node                 types.String `tfsdk:"node"`
 	Kind                 types.String `tfsdk:"kind"`
+	CTID                 types.Int64  `tfsdk:"ctid"`
 	VMID                 types.Int64  `tfsdk:"vmid"`
 	Script               types.String `tfsdk:"script"`
 	Status               types.String `tfsdk:"status"`
@@ -76,8 +78,14 @@ type guestModel struct {
 	AllowImportedDestroy types.Bool   `tfsdk:"allow_imported_destroy"`
 }
 
+func (m guestModel) numericID() int64 {
+	if m.Kind.ValueString() == "lxc" {
+		return m.CTID.ValueInt64()
+	}
+	return m.VMID.ValueInt64()
+}
 func (m guestModel) id() recovery.ID {
-	return recovery.ID{Kind: m.Kind.ValueString(), VMID: m.VMID.ValueInt64()}
+	return recovery.ID{Kind: m.Kind.ValueString(), VMID: m.numericID()}
 }
 func (r *GuestResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData == nil {
@@ -138,19 +146,25 @@ func (m guestModel) creationOptions(ctx context.Context) (map[string]string, map
 	return effective, vars, nil
 }
 func (m guestModel) validate() error {
-	if m.Node.IsNull() || m.Kind.IsNull() || m.Script.IsNull() || m.VMID.IsNull() {
-		return fmt.Errorf("node, kind, VMID and script must be set")
+	if m.Node.IsNull() || m.Kind.IsNull() || m.Script.IsNull() {
+		return fmt.Errorf("node, kind and script must be set")
 	}
-	if _, e := recovery.ParseID(m.id().String()); e != nil {
-		return e
+	switch m.Kind.ValueString() {
+	case "lxc":
+		if m.CTID.IsNull() || m.CTID.IsUnknown() || !m.VMID.IsNull() {
+			return fmt.Errorf("LXC requires ctid and forbids vmid")
+		}
+	case "vm":
+		if m.VMID.IsNull() || m.VMID.IsUnknown() || !m.CTID.IsNull() {
+			return fmt.Errorf("VM requires vmid and forbids ctid")
+		}
+	default:
+		return fmt.Errorf("kind must be lxc or vm")
 	}
-	if m.Node.ValueString() == "" || m.Script.ValueString() == "" {
-		return fmt.Errorf("node and script cannot be empty")
-	}
-	p := m.DeletionPolicy.ValueString()
-	if p != "" && p != "retain" && p != "delete" {
-		return fmt.Errorf("deletion_policy must be retain or delete")
-	}
+	if _,e:=recovery.ParseID(m.id().String());e!=nil {return e}
+	if m.Node.ValueString()=="" || m.Script.ValueString()=="" {return fmt.Errorf("node and script cannot be empty")}
+	p:=m.DeletionPolicy.ValueString()
+	if p!="" && p!="retain" && p!="delete" {return fmt.Errorf("deletion_policy must be retain or delete")}
 	return nil
 }
 func (r *GuestResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -179,7 +193,7 @@ func (r *GuestResource) Create(ctx context.Context, req resource.CreateRequest, 
 		resp.Diagnostics.AddError("Software updates are separate", "Do not set update_request_id when initially creating a guest.")
 		return
 	}
-	_, found, e := r.runtime.API.FindGuest(ctx, m.VMID.ValueInt64())
+	_, found, e := r.runtime.API.FindGuest(ctx, m.numericID())
 	if e != nil {
 		resp.Diagnostics.AddError("Create preflight failed", e.Error())
 		return
@@ -199,12 +213,12 @@ func (r *GuestResource) Create(ctx context.Context, req resource.CreateRequest, 
 			return
 		}
 	}
-	_, e = r.runtime.SSH.Run(ctx, runner.Request{Action: "create", Node: m.Node.ValueString(), Kind: m.Kind.ValueString(), VMID: m.VMID.ValueInt64(), Script: m.Script.ValueString(), ScriptsRef: m.ScriptsRef.ValueString(), CoreRef: m.CoreRef.ValueString(), Settings: settings, ScriptVars: vars, AcceptUnverified: true})
+	_, e = r.runtime.SSH.Run(ctx, runner.Request{Action: "create", Node: m.Node.ValueString(), Kind: m.Kind.ValueString(), VMID: m.numericID(), Script: m.Script.ValueString(), ScriptsRef: m.ScriptsRef.ValueString(), CoreRef: m.CoreRef.ValueString(), Settings: settings, ScriptVars: vars, AcceptUnverified: true})
 	if e != nil {
 		resp.Diagnostics.AddError("Creation uncertain", e.Error()+"; "+recovery.RecoveryHint(m.id()))
 		return
 	}
-	g, found, e := r.runtime.API.FindGuest(ctx, m.VMID.ValueInt64())
+	g, found, e := r.runtime.API.FindGuest(ctx, m.numericID())
 	if e != nil || !found {
 		resp.Diagnostics.AddError("Creation verification uncertain", "Host runner returned success, but API postflight failed. Inspect journal and import; never repeat installer.")
 		return
@@ -242,6 +256,19 @@ func (r *GuestResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		resp.Diagnostics.AddError("Guest absent or not visible", "Cannot prove VMID absence from a permissions-filtered API response. Inspect inventory and use terraform state rm only after verification.")
 		return
 	}
+	if !m.Kind.IsNull() && m.Kind.ValueString()!=id.Kind {
+		resp.Diagnostics.AddError("Guest kind conflicts with imported state", "Type in HCL does not match imported identity; retaining state.")
+		return
+	}
+	if id.Kind=="lxc" {
+		if !m.VMID.IsNull() || (!m.CTID.IsNull() && m.CTID.ValueInt64()!=id.VMID) {
+			resp.Diagnostics.AddError("Conflicting CTID/VMID", "Imported LXC must use ctid only.")
+			return
+		}
+	} else if !m.CTID.IsNull() || (!m.VMID.IsNull() && m.VMID.ValueInt64()!=id.VMID) {
+		resp.Diagnostics.AddError("Conflicting CTID/VMID", "Imported VM must use vmid only.")
+		return
+	}
 	if g.Kind != id.Kind {
 		resp.Diagnostics.AddError("VMID collision", fmt.Sprintf("VMID %d is %s, not %s; retaining state.", id.VMID, g.Kind, id.Kind))
 		return
@@ -262,7 +289,13 @@ func (r *GuestResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	m.ID = types.StringValue(id.String())
 	m.Node = types.StringValue(g.Node)
 	m.Kind = types.StringValue(g.Kind)
-	m.VMID = types.Int64Value(g.VMID)
+	if g.Kind=="lxc" {
+		m.CTID=types.Int64Value(g.VMID)
+		m.VMID=types.Int64Null()
+	} else {
+		m.VMID=types.Int64Value(g.VMID)
+		m.CTID=types.Int64Null()
+	}
 	m.Script = types.StringValue(script)
 	m.Status = types.StringValue(g.Status)
 	// Refresh observed managed compute/disk values; do not synthesize creation-only defaults.
@@ -319,11 +352,11 @@ func (r *GuestResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		resp.Diagnostics.AddError("Invalid guest", e.Error())
 		return
 	}
-	if old.Kind != plan.Kind || old.VMID != plan.VMID || old.Node != plan.Node || old.Script != plan.Script || old.ScriptsRef != plan.ScriptsRef || old.CoreRef != plan.CoreRef || old.DiskKey != plan.DiskKey || !old.ScriptVars.Equal(plan.ScriptVars) {
+	if old.Kind != plan.Kind || old.VMID != plan.VMID || old.CTID != plan.CTID || old.Node != plan.Node || old.Script != plan.Script || old.ScriptsRef != plan.ScriptsRef || old.CoreRef != plan.CoreRef || old.DiskKey != plan.DiskKey || !old.ScriptVars.Equal(plan.ScriptVars) {
 		resp.Diagnostics.AddError("Immutable guest identity/source", "Changing node, VMID, kind, script_vars, disk key, or installation refs is not supported. Import or use an explicit migration plan.")
 		return
 	}
-	g, found, e := r.runtime.API.FindGuest(ctx, plan.VMID.ValueInt64())
+	g, found, e := r.runtime.API.FindGuest(ctx, plan.numericID())
 	if e != nil || !found {
 		resp.Diagnostics.AddError("Cannot inspect guest", "Refusing update without positive guest inspection.")
 		return
@@ -387,7 +420,7 @@ func (r *GuestResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		}
 		if len(delta) > 0 {
 			// A previous resize can change the Proxmox config digest: re-read before writes.
-			g, found, e = r.runtime.API.FindGuest(ctx, plan.VMID.ValueInt64())
+			g, found, e = r.runtime.API.FindGuest(ctx, plan.numericID())
 			if e != nil || !found {
 				resp.Diagnostics.AddError("Cannot re-inspect guest", "Disk may have grown; inspect manually before retry.")
 				return
@@ -399,13 +432,13 @@ func (r *GuestResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		}
 	}
 	if newUpdate {
-		_, e = r.runtime.SSH.Run(ctx, runner.Request{Action: "update", Node: plan.Node.ValueString(), Kind: plan.Kind.ValueString(), VMID: plan.VMID.ValueInt64(), Script: plan.Script.ValueString(), ScriptsRef: plan.UpdateRef.ValueString(), UpdateRequestID: plan.UpdateID.ValueString(), BackupStorage: plan.UpdateBackup.ValueString()})
+		_, e = r.runtime.SSH.Run(ctx, runner.Request{Action: "update", Node: plan.Node.ValueString(), Kind: plan.Kind.ValueString(), VMID: plan.numericID(), Script: plan.Script.ValueString(), ScriptsRef: plan.UpdateRef.ValueString(), UpdateRequestID: plan.UpdateID.ValueString(), BackupStorage: plan.UpdateBackup.ValueString()})
 		if e != nil {
 			resp.Diagnostics.AddError("Application update uncertain", "Inspect the host request journal before retry: "+e.Error())
 			return
 		}
 	}
-	g, found, e = r.runtime.API.FindGuest(ctx, plan.VMID.ValueInt64())
+	g, found, e = r.runtime.API.FindGuest(ctx, plan.numericID())
 	if e != nil || !found {
 		resp.Diagnostics.AddError("Post-update verification failed", "State not advanced; inspect before retrying.")
 		return

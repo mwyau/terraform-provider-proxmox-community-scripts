@@ -22,7 +22,7 @@ func (r *GuestResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if planned.Kind.IsUnknown() || planned.Script.IsUnknown() || planned.ScriptsRef.IsUnknown() || planned.CoreRef.IsUnknown() || planned.Settings.IsUnknown() || planned.GuestDefaults.IsUnknown() || planned.ScriptVars.IsUnknown() {
+	if planned.Kind.IsUnknown() || planned.CTID.IsUnknown() || planned.VMID.IsUnknown() || planned.Script.IsUnknown() || planned.ScriptsRef.IsUnknown() || planned.CoreRef.IsUnknown() || planned.Settings.IsUnknown() || planned.GuestDefaults.IsUnknown() || planned.ScriptVars.IsUnknown() {
 		resp.Diagnostics.AddWarning("Deferred compatibility inspection", "One or more creation values are unknown at plan time. Source inspection must complete when Terraform resolves the values at apply; this plan does not establish compatibility.")
 		return
 	}

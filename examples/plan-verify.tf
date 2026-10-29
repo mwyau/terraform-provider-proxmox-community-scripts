@@ -14,7 +14,7 @@ provider "communityscripts" {
 resource "communityscripts_guest" "inspect_only" {
   node    = "pve1"
   kind    = "lxc"
-  vmid    = 120
+  ctid    = 120
   script  = "adguard"
 
   scripts_ref               = "bc6ab719828f9d52556af3a17ceff2f01c1a17d6"

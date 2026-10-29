@@ -45,7 +45,7 @@ Terraform's plan-time inspector is deliberately narrower than the repository-wid
 | `api_token_id`, `api_token_secret` | Same | API credentials |
 | `validate_certs` | Same | Defaults to true; no inverse alias |
 | `kind`, `script`, `node` | Same | Guest type, script slug, chosen PVE node |
-| `vmid` (both LXC and VM) | Same | Cluster-global guest identity; upstream LXC Core internally consumes `var_ctid` |
+| `ctid` (LXC) / `vmid` (VM) | Same | Exactly one required; Proxmox still uses a cluster-wide numeric VMID internally |
 | `scripts_ref`, `core_ref` | Same | Full immutable Git SHAs for creation |
 | `update_scripts_ref` | Same | Separate immutable source revision for application software-update requests |
 | `settings` | Same | Creation settings and explicit supported compute/disk updates |

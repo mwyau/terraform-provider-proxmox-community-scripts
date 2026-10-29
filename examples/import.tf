@@ -26,7 +26,7 @@ provider "communityscripts" {
 resource "communityscripts_guest" "adguard" {
   node   = "pve1"
   kind   = "lxc"
-  vmid   = 120
+  ctid   = 120
   script = "adguard"
 
   deletion_policy = "retain"

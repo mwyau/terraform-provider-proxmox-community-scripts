@@ -29,7 +29,7 @@ provider "communityscripts" {
 }
 resource "communityscripts_guest" "adguard" {
   node   = "pve1"
-  vmid   = 120
+  ctid   = 120
   kind   = "lxc"
   script = "adguard"
 

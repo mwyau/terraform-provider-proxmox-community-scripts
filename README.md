@@ -89,3 +89,7 @@ MIT licensed. Not affiliated with Proxmox Server Solutions or Community Scripts 
 The canonical `contracts/guest.v1.json` lives in the Ansible repository; an identical copy is committed here. CI fails if the versions, normalized mappings (34 LXC / 14 VM), public input names or supported conversion fixtures diverge. Make interface changes in a coordinated pair of PRs, updating both implementations and tests; bump the contract version for breaking changes. Do **not** add deprecated or compatibility aliases. The versioned contract is a shared schema, not shared runtime state.
 
 For a VMID declared in Terraform, use Terraform for create, hardware changes, updates and destroy. Use Ansible for disjoint in-guest configuration (including its guest SSH connection), inspection, or separately owned PVE host services; do not also use Ansible `action: present/reconcile/update` on the same VMID. Ownership transfer is explicit import/removal, never duplicate state management. See [docs/OWNERSHIP.md](docs/OWNERSHIP.md).
+
+### Kind-specific creation identifiers
+
+Set `ctid` for `kind="lxc"`, or `vmid` for `kind="vm"`; never both. The upstream LXC Core uses `var_ctid`, while PVE APIs use the cluster-scoped numeric VMID internally. Terraform's `id` is **computed** as `lxc/120` or `vm/121` for state and import, not a user-provided creation alias. This matches the Ansible public application role.
