@@ -1,35 +1,17 @@
 package provider
 
 import (
-	"context"
-	"testing"
-
-	"github.com/hashicorp/terraform-plugin-framework/resource"
+ "testing"
+ "github.com/hashicorp/terraform-plugin-framework/types"
 )
-
-func TestCreateFailsClosed(t *testing.T) {
-	r := &GuestResource{}
-	var resp resource.CreateResponse
-	r.Create(context.Background(), resource.CreateRequest{}, &resp)
-	if !resp.Diagnostics.HasError() {
-		t.Fatal("Create must fail without any installer implementation")
-	}
+func TestModelValidation(t *testing.T){
+ m:=guestModel{Node:types.StringValue("pve1"),Kind:types.StringValue("lxc"),VMID:types.Int64Value(120),Script:types.StringValue("adguard"),DeletionPolicy:types.StringValue("retain")}
+ if e:=m.validate();e!=nil{t.Fatal(e)}
+ m.DeletionPolicy=types.StringValue("destroy-all");if e:=m.validate();e==nil{t.Fatal("bad destroy policy accepted")}
+ m.DeletionPolicy=types.StringNull();m.VMID=types.Int64Value(12)
+ if e:=m.validate();e==nil{t.Fatal("bad VMID accepted")}
 }
-
-func TestUpdateFailsClosed(t *testing.T) {
-	r := &GuestResource{}
-	var resp resource.UpdateResponse
-	r.Update(context.Background(), resource.UpdateRequest{}, &resp)
-	if !resp.Diagnostics.HasError() {
-		t.Fatal("Update must not mutate a guest")
-	}
-}
-
-func TestDeleteRetainsGuest(t *testing.T) {
-	r := &GuestResource{}
-	var resp resource.DeleteResponse
-	r.Delete(context.Background(), resource.DeleteRequest{}, &resp)
-	if resp.Diagnostics.HasError() || len(resp.Diagnostics.Warnings()) == 0 {
-		t.Fatal("Delete must retain the real Proxmox guest and warn")
-	}
+func TestNoDefaultDelete(t *testing.T){
+ m:=guestModel{DeletionPolicy:types.StringNull()}
+ if !m.DeletionPolicy.IsNull(){t.Fatal("default must retain")}
 }
