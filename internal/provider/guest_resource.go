@@ -174,6 +174,9 @@ func (r *GuestResource) Update(ctx context.Context,req resource.UpdateRequest,re
   for k:=range oldOpts{if _,ok:=newOpts[k];!ok {resp.Diagnostics.AddError("Settings removal unsupported","Removing a previously managed setting is not an approved mutation.");return}}
   if len(delta)>0&&!plan.Hardware.ValueBool(){resp.Diagnostics.AddError("Hardware update approval required","Set allow_hardware_updates=true to reconcile cores or memory.");return}
  }
+ if plan.UpdateID.Equal(old.UpdateID) && (!plan.UpdateRef.Equal(old.UpdateRef) || !plan.Backup.Equal(old.Backup)) {
+  resp.Diagnostics.AddError("Update request identity is immutable","Changing the pinned updater or backup storage requires a new update_request_id; never change the meaning of a completed request.");return
+ }
  newUpdate:=!plan.UpdateID.IsNull()&&plan.UpdateID.ValueString()!="" && !plan.UpdateID.Equal(old.UpdateID)
  if newUpdate && (plan.UpdateRef.IsNull()||plan.Backup.IsNull()||r.runtime.SSH==nil){
   resp.Diagnostics.AddError("Missing update prerequisites","Set update_scripts_ref, backup_storage, and provider ssh_target.");return
