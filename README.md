@@ -16,7 +16,7 @@ Experimental **native Go** Terraform/OpenTofu provider for Community Scripts gue
 - Destroy retains the guest by default. Destructive deletion requires both explicit Terraform flags, an exact identity match, a stopped guest, and a verified host journal (or separate explicit import-delete approval).
 - No automatic guest shutdown/reboot, arbitrary SSH access to guests, silent storage movement, disk shrink, or VM application updater.
 
-See [AGENTS.md](AGENTS.md), [PLAN.md](PLAN.md) and [docs/INTERRUPTED_CREATION.md](docs/INTERRUPTED_CREATION.md) for the immutable design and recovery protocol.
+See [AGENTS.md](AGENTS.md), [PLAN.md](PLAN.md), [docs/INTERRUPTED_CREATION.md](docs/INTERRUPTED_CREATION.md), and [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) for the lifecycle design, cross-repo naming contract, scan evidence, and remaining gaps.
 
 ## Development / installation
 
@@ -51,23 +51,34 @@ The runner uses `/var/lib/proxmox-community-scripts/operations` for durable root
 
 **Risk:** the runner executes externally maintained root installers. Do not install it or grant its sudo permission on production hosts until you have completed the disposable integration and audit gates in PLAN.md.
 
+## Read-only verification at terraform plan
+
+New resources with known pinned 40-character `scripts_ref` and `core_ref` are inspected in `ModifyPlan`. The provider fetches the exact script and the relevant shared Core source, rejects missing or clearly retired entrypoints and absent requested Core variable mappings, and warns about possible prompts and VM-specific variable consumption. **No script is executed by plan.** Network failure fails closed, while unknown input values are explicitly deferred to apply-time inspection. Passing means **source checks passed, not that a live installation succeeded**.
+
+```sh
+terraform plan
+# Review the warnings and pinned revisions. No apply is needed to inspect scripts.
+```
+
+See [examples/plan-verify.tf](examples/plan-verify.tf). Since script variables may contain credentials, be aware that Terraform can store `script_vars` values in encrypted/access-controlled state even though the schema marks them sensitive. The root runner never persists these values in its on-host journal.
+
 ## Resource declaration
 
 See [examples/lifecycle.tf](examples/lifecycle.tf) and [examples/import.tf](examples/import.tf). Proposed provider source is `mwyau/proxmox-community-scripts`; resource type is `communityscripts_guest` (the provider's internal type prefix is `communityscripts`).
 
-An LXC creation requires `scripts_ref`, `core_ref`, `accept_unverified_install=true`, a missing VMID, and `ssh_target` pointing to the same node as the requested guest. Both `settings` and `disk_key` are optional. The supported normalized creation settings are `cores`, `memory` (MiB), `disk_size` (GiB), `hostname`, `bridge`, `storage`, and `vlan`. Inputs map to the LXC `var_*` or VM `VM_*` Core contract. Unsupported inputs and raw arbitrary installer environment variables are refused.
+Creation requires `scripts_ref`, `core_ref`, `accept_unverified_install=true`, a free VMID, and `ssh_target` pointing to the selected coordinator. The complete **34 LXC / 14 VM Ansible-compatible normalized settings** vocabulary is implemented in `internal/contract`, with settings precedence `settings` > `guest_defaults[kind]` > `guest_defaults.all` > upstream defaults. `script_vars` is a protected, bounded creation-only environment map (64 entries, 32 KiB). `settings` and `disk_key` are optional. See [the exact field names and conversions](docs/COMPATIBILITY.md). Missing values are not overridden; inherited defaults never reconcile existing guests.
 
 `terraform import communityscripts_guest.adguard lxc/120` (or `vm/120`) associates an **existing** guest. It does not run the script. It requires strongly identifying metadata in the PVE API; existing LXCs with updater evidence but no description cannot yet be imported through API-only inspection.
 
 **In-place hardware:** change only `settings.cores`, `settings.memory`, or grow `settings.disk_size`, with `allow_hardware_updates=true`. For LXC disk growth, `disk_key` defaults to `rootfs`; for VM disks supply the exact existing `scsiN`, `virtioN`, `sataN`, or `ideN` key. No disk creation/shrink/move is supported. CPU/memory changes may remain pending until restart.
 
-**Application updates:** after initial create, set or change `update_request_id` together with a pinned `update_scripts_ref` and `backup_storage`. A host journal prevents executing the same successful request ID twice. This is **request-level** idempotency, not an application-version detector. The updater can still change hardware, fail partially, or have other side effects; verify the guest after each update. VM application updates are not supported.
+**Application updates:** after initial create, set or change `update_request_id` together with a pinned `update_scripts_ref` and `update_backup_storage` (legacy alias `backup_storage`). A host journal prevents executing the same successful request ID twice. This is **request-level** idempotency, not an application-version detector. The updater can still change hardware, fail partially, or have other side effects; verify the guest after each update. VM application updates are not supported.
 
 **Destroy:** omit `deletion_policy` (or use `retain`) to remove Terraform tracking without deleting the guest. For actual deletion set `deletion_policy="delete"` and `confirm_destroy=true`, apply those settings first, stop the guest yourself, then plan destroy. A guest imported without a verified creation journal additionally requires `allow_imported_destroy=true`. The host runner's durable journal prevents auto-destroy of uncertain partial creation. Never use destructive replacement to fix an identity conflict.
 
 ## Testing and status
 
-GitHub Actions enforces committed Go formatting, dependency checksums, `go vet`, `go test -race`, `go build`, and Terraform HCL/provider-schema validation against local mock APIs and a locally built development provider; it never executes Community Scripts. Tests cover successful/failed creation, journal replay, race-relevant collisions, extra VMIDs, LXC updater evidence, application update replay, identity conflict, retain/delete guards, and disk growth safety.
+GitHub Actions checks the Ansible mapping for drift, compiles and tests Go with race detection, validates the Terraform provider schema, and runs a real **read-only Terraform plan** against pinned source files. It does not execute Community Scripts or mutate Proxmox. Formatting normalization is used only during feature development. Tests cover successful/failed creation, journal replay, race-relevant collisions, extra VMIDs, LXC updater evidence, application update replay, identity conflict, retain/delete guards, and disk growth safety.
 
 **Known gaps / release blockers:** live PVE 8/9 testing (LXC + VM, stopped/running, bridge/VLAN/storage, source compatibility), robust cluster-wide coordinator enforcement, installer cancellation behavior, source retirement detection, and release packaging/signing. Until these are addressed, use disposable hosts only.
 

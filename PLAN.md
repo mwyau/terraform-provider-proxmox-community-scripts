@@ -25,7 +25,12 @@ Two credentials/privileges: least-privilege PVE API token for API; host root via
 - [x] API-backed CPU/memory reconciliation and explicit grow-only disk resizing with config digest. **Pending/restart semantics need live tests.**
 - [x] pinned LXC updater with request-ID journal, backup storage requirement, updater slug verification and hardware-drift alarm.
 - [x] guarded deletion with retain-default, stopped-state and identity checks, operator opt-in, and journal tombstone.
-- [x] documentation, HCL samples, Go mocked API/runner tests, race-enabled test suite and Terraform schema validation.
+- [x] documentation, HCL samples, Go mocked API/runner tests, race-enabled test suite, Terraform schema validation and pinned-source `terraform plan` verification.
+- [x] 34 LXC + 14 VM field mappings, secure `script_vars`, and layered `guest_defaults` with Ansible mapping drift check.
+- [x] source-level compatibility and retirement heuristics for **selected** pinned scripts; inspect-only, not execution certification.
+- [ ] guest `ssh` and VM `cloud_init` parity (safe public-key staging, supported image checks), import `script_override` policy.
+- [ ] LXC swap and VM sockets reconcile parity, detailed restart/pending config behavior.
+- [ ] stronger script compatibility evidence from selected pinned LXC/VM families and automated corpus scans on newer upstream revisions.
 - [ ] self-hosted disposable PVE live test matrix: creation, interrupted process, second plan, VMID remap, update, destroy, import, PVE 8/9, storage backends.
 - [ ] registry packaging, signed releases and release gates (only after live tests).
 

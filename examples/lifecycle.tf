@@ -25,6 +25,7 @@ provider "communityscripts" {
   api_token_id     = var.api_token_id
   api_token_secret = var.api_token_secret
   ssh_target       = "automation@pve1.example.internal"
+  validate_certs   = true
 }
 resource "communityscripts_guest" "adguard" {
   node   = "pve1"
@@ -37,13 +38,19 @@ resource "communityscripts_guest" "adguard" {
   accept_unverified_install  = true
   allow_hardware_updates     = true
   disk_key                   = "rootfs"
+  guest_defaults = {
+    all = { cores = "2" }
+    lxc = { os = "debian" }
+  }
   settings = {
-    cores     = "2"
     memory    = "2048"
     disk_size = "8"
     bridge    = "vmbr0"
     storage   = "local-lvm"
   }
+
+  # Optional application-specific variables, validated and passed only at creation.
+  # script_vars = { APP_FEATURE = "enabled" }
 
   # Default: Terraform destroy removes *state tracking only*.
   deletion_policy = "retain"

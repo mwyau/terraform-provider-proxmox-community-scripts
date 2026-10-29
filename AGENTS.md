@@ -9,6 +9,9 @@ Goal: manage Proxmox Community Scripts LXC/VM guests natively through Terraform/
 - VMID is cluster-scoped, script identity and kind immutable, migration must not imply creation. No silent adoption or VMID reassignment. Unknown/conflicting provenance always fails closed.
 - Terraform import is explicitly supported for verified existing guests. API metadata and LXC updater entrypoints are evidence, *not* cryptographic proof.
 - Creation-only defaults never modify existing hardware. Application updates and host-resource reconciliation are distinct explicit actions.
+- The canonical public `settings` names are identical to the Ansible feature-branch `LXC_FIELDS` (34) and `VM_FIELDS` (14). `script_vars` are protected, creation-only and cannot override normalized/Core controls. `guest_defaults` priority is explicit settings > kind > all > upstream script defaults.
+- For new resources `terraform plan` must inspect the pinned script and Core through bounded, read-only HTTP before apply. Plan failures stop missing, retired, or unsupported sources; static success never certifies unattended behavior. Unknown values require apply-time inspection.
+- Preserve Ansible naming where semantics match: `validate_certs`, `update_request_id`, `update_backup_storage`, `script_vars`, `guest_defaults`. Document explicit exceptions such as Terraform `vmid` for LXC and VM, `endpoint` vs Ansible `api_host`, and native CRUD vs Ansible `action`.
 
 ## Crash/interruption and state
 - Terraform state and state locking **do not** guarantee exactly-once side effects. Create may be interrupted after guest allocation but before state save; a failed Create is tainted and may otherwise rerun.
@@ -26,7 +29,8 @@ Goal: manage Proxmox Community Scripts LXC/VM guests natively through Terraform/
 - All lifecycle paths need fake API/SSH/PVE runner tests, collision, wrong-kind/provenance, journal state transitions, timeout, retries, and interrupted-creation fault injection.
 - Never run downloaded upstream scripts in public GitHub Actions. Real integration tests require disposable isolated PVE, explicit operator opt-in, and recorded PVE/storage/source revisions.
 - Prefer safe partial functionality over falsely promising transactional semantics. When a phase is unavailable, fail explicitly, document exactly what is missing, and do not silently emulate it.
-- Keep `PLAN.md`, `docs/INTERRUPTED_CREATION.md`, README, and tests synchronized with actual implemented behavior. Do not claim live validation from mocked CI.
+- Keep `PLAN.md`, `docs/INTERRUPTED_CREATION.md`, `docs/COMPATIBILITY.md`, README, and tests synchronized with actual implemented behavior.
+- Keep the Go mapping in sync with the live Ansible feature branch via `scripts/check_ansible_contract.py`; avoid copying the entire Ansible scanner into this provider. Document independent source scan evidence and do not equate source inventory with live compatibility. Do not claim live validation from mocked CI.
 
 ## Git work
 - Continue in `feat/go-provider-foundation`; do not overwrite or force-push existing work.
