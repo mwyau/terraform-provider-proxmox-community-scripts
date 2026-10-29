@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mwyau/terraform-provider-proxmox-community-scripts/internal/contract"
 	"github.com/mwyau/terraform-provider-proxmox-community-scripts/internal/proxmox"
 )
 
@@ -33,6 +34,7 @@ type Request struct {
 	ScriptsRef           string            `json:"scripts_ref"`
 	CoreRef              string            `json:"core_ref"`
 	Settings             map[string]string `json:"settings,omitempty"`
+	ScriptVars           map[string]string `json:"script_vars,omitempty"`
 	UpdateRequestID      string            `json:"update_request_id,omitempty"`
 	BackupStorage        string            `json:"backup_storage,omitempty"`
 	AcceptUnverified     bool              `json:"accept_unverified,omitempty"`
@@ -71,27 +73,11 @@ func valid(r Request) error {
 	if (r.Action == "create" || r.Action == "update") && (!shaRE.MatchString(r.ScriptsRef) || (r.Action == "create" && !shaRE.MatchString(r.CoreRef))) {
 		return errors.New("immutable full source SHA required")
 	}
-	for k, v := range r.Settings {
-		if !simpleRE.MatchString(k) || len(v) > 1024 || strings.ContainsAny(v, "\x00\r\n") {
-			return fmt.Errorf("unsafe setting %q", k)
-		}
-		switch k {
-		case "cores", "memory", "disk_size", "vlan":
-			if v == "" || strings.Trim(v, "0123456789") != "" {
-				return fmt.Errorf("setting %s must be an unsigned integer", k)
-			}
-			n, e := strconv.ParseInt(v, 10, 64)
-			if e != nil || k == "cores" && (n < 1 || n > 128) || k == "memory" && (n < 256 || n > 1048576) ||
-				k == "disk_size" && (n < 1 || n > 100000) || k == "vlan" && (n < 1 || n > 4094) {
-				return fmt.Errorf("invalid numeric setting %s", k)
-			}
-		case "hostname", "bridge", "storage":
-			if !simpleRE.MatchString(v) {
-				return fmt.Errorf("invalid host/network/storage value for %s", k)
-			}
-		default:
-			return fmt.Errorf("unsupported normalized creation setting %q", k)
-		}
+	if r.Action=="create" {
+		if err:=contract.ValidateSettings(r.Kind,r.Settings);err!=nil{return err}
+		if err:=contract.ScriptVars(r.ScriptVars);err!=nil{return err}
+	} else if len(r.Settings)>0||len(r.ScriptVars)>0 {
+		return errors.New("creation settings and script_vars cannot be passed to update/delete")
 	}
 	if r.Action == "create" && !r.AcceptUnverified {
 		return errors.New("creation requires explicit accept_unverified approval")
@@ -190,7 +176,10 @@ func newJournal(req Request) (Journal, error) {
 	if _, err := rand.Read(data[:]); err != nil {
 		return Journal{}, err
 	}
-	return Journal{Attempt: hex.EncodeToString(data[:]), Phase: "prepared", Request: req, Time: time.Now().UTC().Format(time.RFC3339)}, nil
+	safe:=req
+	safe.Settings=nil // Never persist app settings that may contain credentials.
+	safe.ScriptVars=nil // The journal is not a secret store.
+	return Journal{Attempt: hex.EncodeToString(data[:]), Phase: "prepared", Request: safe, Time: time.Now().UTC().Format(time.RFC3339)}, nil
 }
 func (r *Runner) exec(ctx context.Context, name string, args ...string) (string, error) {
 	return r.System.Run(ctx, name, args, nil)
@@ -415,21 +404,9 @@ func (r *Runner) create(ctx context.Context, req Request) (Result, error) {
 		env["VM_VMID"] = fmt.Sprint(req.VMID)
 		env["VM_UNATTENDED"] = "1"
 	}
-	for k, v := range req.Settings {
-		lxcMap := map[string]string{"cores": "var_cpu", "memory": "var_ram", "disk_size": "var_disk", "hostname": "var_hostname", "bridge": "var_brg", "storage": "var_container_storage", "vlan": "var_vlan"}
-		vmMap := map[string]string{"cores": "VM_CORES", "memory": "VM_RAM", "disk_size": "VM_DISK_SIZE", "hostname": "VM_HOSTNAME", "bridge": "VM_BRIDGE", "storage": "VM_STORAGE", "vlan": "VM_VLAN"}
-		key := lxcMap[k]
-		if req.Kind == "vm" {
-			key = vmMap[k]
-		}
-		if key == "" {
-			return fail(fmt.Errorf("unsupported Core setting %q", k))
-		}
-		if k == "disk_size" && req.Kind == "vm" {
-			v += "G"
-		}
-		env[key] = v
-	}
+	variables, e:=contract.Environment(req.Kind,req.Settings,req.ScriptVars)
+	if e!=nil{return fail(e)}
+	for k,v:=range variables {env[k]=v}
 	if _, e = r.System.Run(ctx, "bash", argv, env); e != nil {
 		return fail(e)
 	}
