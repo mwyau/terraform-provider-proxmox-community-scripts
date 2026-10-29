@@ -15,8 +15,11 @@ import (
 )
 
 type Guest struct {
-	VMID                                  int64
-	Node, Kind, Description, Tags, Status string
+ VMID int64
+ Node, Kind, Description, Tags, Status string
+ Cores, Memory int64
+ Disks map[string]string
+ Digest string
 }
 type Client struct {
 	base, token string
@@ -114,21 +117,29 @@ func (c *Client) FindGuest(ctx context.Context, vmid int64) (Guest, bool, error)
 		kind = "qemu"
 	}
 	path := "/nodes/" + url.PathEscape(g.Node) + "/" + kind + "/" + strconv.FormatInt(vmid, 10)
-	var cfg struct {
-		Description string `json:"description"`
-		Tags        string `json:"tags"`
-	}
-	if e := c.get(ctx, path+"/config", &cfg); e != nil {
-		return Guest{}, false, e
-	}
+ var cfg map[string]json.RawMessage
+ if e:=c.get(ctx,path+"/config",&cfg);e!=nil{return Guest{},false,e}
+ getString:=func(k string)string{var v string;_ = json.Unmarshal(cfg[k],&v);return v}
+ getInt:=func(k string)int64{
+  var n json.Number
+  if len(cfg[k])==0{return 0}
+  if e:=json.Unmarshal(cfg[k],&n);e==nil{v,_:=n.Int64();return v}
+  str:=getString(k);v,_:=strconv.ParseInt(str,10,64);return v
+ }
+ g.Description=getString("description");g.Tags=getString("tags");g.Digest=getString("digest")
+ g.Cores=getInt("cores");g.Memory=getInt("memory")
+ g.Disks=map[string]string{}
+ for k:=range cfg{
+  if k=="rootfs"||strings.HasPrefix(k,"scsi")||strings.HasPrefix(k,"virtio")||strings.HasPrefix(k,"sata")||strings.HasPrefix(k,"ide"){
+   if v:=getString(k);v!=""{g.Disks[k]=v}
+  }
+ }
 	var state struct {
 		Status string `json:"status"`
 	}
 	if e := c.get(ctx, path+"/status/current", &state); e != nil {
 		return Guest{}, false, e
 	}
-	g.Description = cfg.Description
-	g.Tags = cfg.Tags
 	g.Status = state.Status
 	return g, true, nil
 }
