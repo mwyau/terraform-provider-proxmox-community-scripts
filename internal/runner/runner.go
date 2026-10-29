@@ -249,6 +249,9 @@ func (r *Runner) update(ctx context.Context,req Request)(Result,error){
  }
  g,e:=r.requireGuest(ctx,req);if e!=nil{return Result{},e}
  if g.Status!="running"{return Result{},errors.New("LXC must be running for updater")}
+ configPath:=fmt.Sprintf("/nodes/%s/lxc/%d/config",req.Node,req.VMID)
+ beforeConfig,e:=r.exec(ctx,"pvesh","get",configPath,"--output-format","json")
+ if e!=nil{return Result{},e}
  // Run a positive LXC updater entrypoint inspection before any updater is invoked.
  entry,e:=r.exec(ctx,"pct","exec",fmt.Sprint(req.VMID),"--","cat","/usr/bin/update");if e!=nil{return Result{},e}
  slug,e:=proxmox.DetectUpdaterSlug(entry);if e!=nil{return Result{},e}
@@ -260,6 +263,14 @@ func (r *Runner) update(ctx context.Context,req Request)(Result,error){
  j.Phase="running";if e=atomicJournal(path,j);e!=nil{return Result{},e}
  env:=map[string]string{"PHS_SILENT":"1","TERM":"dumb","var_container":fmt.Sprint(req.VMID),"var_unattended":"yes","var_skip_confirm":"yes","var_continue_on_error":"no","var_auto_reboot":"no","var_dry_run":"no","var_backup":"yes","var_backup_storage":req.BackupStorage}
  if _,e=r.System.Run(ctx,"bash",[]string{filepath.Join(scripts,"tools/pve/update-apps.sh")},env);e!=nil{return fail(e)}
+ afterConfig,e:=r.exec(ctx,"pvesh","get",configPath,"--output-format","json")
+ if e!=nil{return fail(e)}
+ var before,after map[string]json.RawMessage
+ if e=json.Unmarshal([]byte(beforeConfig),&before);e!=nil{return fail(e)}
+ if e=json.Unmarshal([]byte(afterConfig),&after);e!=nil{return fail(e)}
+ for _,k:=range []string{"cores","memory","swap","rootfs","net0","net1"} {
+  if string(before[k])!=string(after[k]) {return fail(fmt.Errorf("upstream updater changed guest hardware/network %s; inspect and reconcile separately",k))}
+ }
  if _,e=r.requireGuest(ctx,req);e!=nil{return fail(e)}
  j.Phase="verified";if e=atomicJournal(path,j);e!=nil{return Result{},e}
  return Result{Status:"verified",Journal:path},nil
