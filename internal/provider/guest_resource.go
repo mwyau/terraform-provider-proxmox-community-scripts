@@ -40,14 +40,14 @@ func (r *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 			"core_ref":                  schema.StringAttribute{Optional: true, MarkdownDescription: "Immutable 40-char Core commit used only at creation."},
 			"disk_key":                  schema.StringAttribute{Optional: true, MarkdownDescription: "Existing disk to grow: rootfs for LXC; explicit scsiN/virtioN/sataN/ideN for VM. Never creates or moves disks."},
 			"settings":                  schema.MapAttribute{ElementType: types.StringType, Optional: true, MarkdownDescription: "Creation settings (cores,memory,disk_size,hostname,bridge,vlan,storage) mapped to the upstream Core variables. Only cores/memory can be changed in-place."},
-			"guest_defaults": schema.MapAttribute{ElementType: types.MapType{ElemType:types.StringType},Optional:true,MarkdownDescription:"Creation-only layered defaults (all, lxc, vm). Precedence: settings > matching kind > all > upstream script defaults."},
-			"script_vars": schema.MapAttribute{ElementType:types.StringType,Optional:true,Sensitive:true,MarkdownDescription:"Creation-only app-specific environment variables. Protected names and normalized Core fields cannot be overridden; values remain in Terraform state."},
+			"guest_defaults":            schema.MapAttribute{ElementType: types.MapType{ElemType: types.StringType}, Optional: true, MarkdownDescription: "Creation-only layered defaults (all, lxc, vm). Precedence: settings > matching kind > all > upstream script defaults."},
+			"script_vars":               schema.MapAttribute{ElementType: types.StringType, Optional: true, Sensitive: true, MarkdownDescription: "Creation-only app-specific environment variables. Protected names and normalized Core fields cannot be overridden; values remain in Terraform state."},
 			"accept_unverified_install": schema.BoolAttribute{Optional: true, MarkdownDescription: "Explicit high-risk approval for running unverified root installation code."},
 			"allow_hardware_updates":    schema.BoolAttribute{Optional: true, MarkdownDescription: "Allow explicitly requested in-place CPU/memory changes."},
 			"update_request_id":         schema.StringAttribute{Optional: true, MarkdownDescription: "An explicit unique request ID for a single LXC software update. Change it to request the next update."},
 			"update_scripts_ref":        schema.StringAttribute{Optional: true, MarkdownDescription: "Pinned Community Scripts revision containing tools/pve/update-apps.sh."},
 			"backup_storage":            schema.StringAttribute{Optional: true, MarkdownDescription: "Required backup storage for LXC software updates."},
-			"update_backup_storage": schema.StringAttribute{Optional:true,MarkdownDescription:"Ansible-compatible update backup storage; required for LXC updates. Do not set alongside backup_storage."},
+			"update_backup_storage":     schema.StringAttribute{Optional: true, MarkdownDescription: "Ansible-compatible update backup storage; required for LXC updates. Do not set alongside backup_storage."},
 			"deletion_policy":           schema.StringAttribute{Optional: true, MarkdownDescription: "retain (default) or delete. Delete additionally requires confirm_destroy."},
 			"confirm_destroy":           schema.BoolAttribute{Optional: true, MarkdownDescription: "Explicit approval to delete an existing guest in the stopped state."},
 			"allow_imported_destroy":    schema.BoolAttribute{Optional: true, MarkdownDescription: "Dangerous: allow deletion of an imported guest without a verified host creation journal."},
@@ -72,7 +72,7 @@ type guestModel struct {
 	UpdateID             types.String `tfsdk:"update_request_id"`
 	UpdateRef            types.String `tfsdk:"update_scripts_ref"`
 	Backup               types.String `tfsdk:"backup_storage"`
-	UpdateBackup types.String `tfsdk:"update_backup_storage"`
+	UpdateBackup         types.String `tfsdk:"update_backup_storage"`
 	DeletionPolicy       types.String `tfsdk:"deletion_policy"`
 	ConfirmDestroy       types.Bool   `tfsdk:"confirm_destroy"`
 	AllowImportedDestroy types.Bool   `tfsdk:"allow_imported_destroy"`
@@ -105,29 +105,48 @@ func (m guestModel) options(ctx context.Context) (map[string]string, error) {
 	}
 	return values, nil
 }
-func (m guestModel) backupStorage()(string,error){
- if !m.UpdateBackup.IsNull()&&!m.Backup.IsNull(){return "",fmt.Errorf("update_backup_storage and backup_storage cannot both be set")}
- if !m.UpdateBackup.IsNull(){return m.UpdateBackup.ValueString(),nil}
- return m.Backup.ValueString(),nil
+func (m guestModel) backupStorage() (string, error) {
+	if !m.UpdateBackup.IsNull() && !m.Backup.IsNull() {
+		return "", fmt.Errorf("update_backup_storage and backup_storage cannot both be set")
+	}
+	if !m.UpdateBackup.IsNull() {
+		return m.UpdateBackup.ValueString(), nil
+	}
+	return m.Backup.ValueString(), nil
 }
-func (m guestModel) creationOptions(ctx context.Context)(map[string]string,map[string]string,error){
- settings,e:=m.options(ctx);if e!=nil{return nil,nil,e}
- defaults:=map[string]map[string]string{}
- if !m.GuestDefaults.IsNull(){
-  if m.GuestDefaults.IsUnknown(){return nil,nil,fmt.Errorf("guest_defaults must be known for creation")}
-  diags:=m.GuestDefaults.ElementsAs(ctx,&defaults,false)
-  if diags.HasError(){return nil,nil,fmt.Errorf("invalid guest_defaults: %s",diags.Errors()[0].Summary())}
- }
- effective,e:=contract.ResolveDefaults(m.Kind.ValueString(),defaults,settings)
- if e!=nil{return nil,nil,e}
- vars:=map[string]string{}
- if !m.ScriptVars.IsNull(){
-  if m.ScriptVars.IsUnknown(){return nil,nil,fmt.Errorf("script_vars must be known for creation")}
-  diags:=m.ScriptVars.ElementsAs(ctx,&vars,false)
-  if diags.HasError(){return nil,nil,fmt.Errorf("invalid script_vars: %s",diags.Errors()[0].Summary())}
- }
- if e=contract.ScriptVars(vars);e!=nil{return nil,nil,e}
- return effective,vars,nil
+func (m guestModel) creationOptions(ctx context.Context) (map[string]string, map[string]string, error) {
+	settings, e := m.options(ctx)
+	if e != nil {
+		return nil, nil, e
+	}
+	defaults := map[string]map[string]string{}
+	if !m.GuestDefaults.IsNull() {
+		if m.GuestDefaults.IsUnknown() {
+			return nil, nil, fmt.Errorf("guest_defaults must be known for creation")
+		}
+		diags := m.GuestDefaults.ElementsAs(ctx, &defaults, false)
+		if diags.HasError() {
+			return nil, nil, fmt.Errorf("invalid guest_defaults: %s", diags.Errors()[0].Summary())
+		}
+	}
+	effective, e := contract.ResolveDefaults(m.Kind.ValueString(), defaults, settings)
+	if e != nil {
+		return nil, nil, e
+	}
+	vars := map[string]string{}
+	if !m.ScriptVars.IsNull() {
+		if m.ScriptVars.IsUnknown() {
+			return nil, nil, fmt.Errorf("script_vars must be known for creation")
+		}
+		diags := m.ScriptVars.ElementsAs(ctx, &vars, false)
+		if diags.HasError() {
+			return nil, nil, fmt.Errorf("invalid script_vars: %s", diags.Errors()[0].Summary())
+		}
+	}
+	if e = contract.ScriptVars(vars); e != nil {
+		return nil, nil, e
+	}
+	return effective, vars, nil
 }
 func (m guestModel) validate() error {
 	if m.Node.IsNull() || m.Kind.IsNull() || m.Script.IsNull() || m.VMID.IsNull() {
@@ -356,16 +375,22 @@ func (r *GuestResource) Update(ctx context.Context, req resource.UpdateRequest, 
 			return
 		}
 	}
-	planBackup,backupErr:=plan.backupStorage()
- if backupErr!=nil{resp.Diagnostics.AddError("Conflicting update options",backupErr.Error());return}
- oldBackup,oldErr:=old.backupStorage()
- if oldErr!=nil{resp.Diagnostics.AddError("Conflicting prior update options",oldErr.Error());return}
- if plan.UpdateID.Equal(old.UpdateID) && (!plan.UpdateRef.Equal(old.UpdateRef) || planBackup!=oldBackup) {
+	planBackup, backupErr := plan.backupStorage()
+	if backupErr != nil {
+		resp.Diagnostics.AddError("Conflicting update options", backupErr.Error())
+		return
+	}
+	oldBackup, oldErr := old.backupStorage()
+	if oldErr != nil {
+		resp.Diagnostics.AddError("Conflicting prior update options", oldErr.Error())
+		return
+	}
+	if plan.UpdateID.Equal(old.UpdateID) && (!plan.UpdateRef.Equal(old.UpdateRef) || planBackup != oldBackup) {
 		resp.Diagnostics.AddError("Update request identity is immutable", "Changing the pinned updater or backup storage requires a new update_request_id; never change the meaning of a completed request.")
 		return
 	}
 	newUpdate := !plan.UpdateID.IsNull() && plan.UpdateID.ValueString() != "" && !plan.UpdateID.Equal(old.UpdateID)
-	if newUpdate && (plan.UpdateRef.IsNull() || planBackup=="" || r.runtime.SSH == nil) {
+	if newUpdate && (plan.UpdateRef.IsNull() || planBackup == "" || r.runtime.SSH == nil) {
 		resp.Diagnostics.AddError("Missing update prerequisites", "Set update_scripts_ref, update_backup_storage, and provider ssh_target.")
 		return
 	}

@@ -72,10 +72,14 @@ func valid(r Request) error {
 	if (r.Action == "create" || r.Action == "update") && (!shaRE.MatchString(r.ScriptsRef) || (r.Action == "create" && !shaRE.MatchString(r.CoreRef))) {
 		return errors.New("immutable full source SHA required")
 	}
-	if r.Action=="create" {
-		if err:=contract.ValidateSettings(r.Kind,r.Settings);err!=nil{return err}
-		if err:=contract.ScriptVars(r.ScriptVars);err!=nil{return err}
-	} else if len(r.Settings)>0||len(r.ScriptVars)>0 {
+	if r.Action == "create" {
+		if err := contract.ValidateSettings(r.Kind, r.Settings); err != nil {
+			return err
+		}
+		if err := contract.ScriptVars(r.ScriptVars); err != nil {
+			return err
+		}
+	} else if len(r.Settings) > 0 || len(r.ScriptVars) > 0 {
 		return errors.New("creation settings and script_vars cannot be passed to update/delete")
 	}
 	if r.Action == "create" && !r.AcceptUnverified {
@@ -175,9 +179,9 @@ func newJournal(req Request) (Journal, error) {
 	if _, err := rand.Read(data[:]); err != nil {
 		return Journal{}, err
 	}
-	safe:=req
-	safe.Settings=nil // Never persist app settings that may contain credentials.
-	safe.ScriptVars=nil // The journal is not a secret store.
+	safe := req
+	safe.Settings = nil   // Never persist app settings that may contain credentials.
+	safe.ScriptVars = nil // The journal is not a secret store.
 	return Journal{Attempt: hex.EncodeToString(data[:]), Phase: "prepared", Request: safe, Time: time.Now().UTC().Format(time.RFC3339)}, nil
 }
 func (r *Runner) exec(ctx context.Context, name string, args ...string) (string, error) {
@@ -403,9 +407,13 @@ func (r *Runner) create(ctx context.Context, req Request) (Result, error) {
 		env["VM_VMID"] = fmt.Sprint(req.VMID)
 		env["VM_UNATTENDED"] = "1"
 	}
-	variables, e:=contract.Environment(req.Kind,req.Settings,req.ScriptVars)
-	if e!=nil{return fail(e)}
-	for k,v:=range variables {env[k]=v}
+	variables, e := contract.Environment(req.Kind, req.Settings, req.ScriptVars)
+	if e != nil {
+		return fail(e)
+	}
+	for k, v := range variables {
+		env[k] = v
+	}
 	if _, e = r.System.Run(ctx, "bash", argv, env); e != nil {
 		return fail(e)
 	}

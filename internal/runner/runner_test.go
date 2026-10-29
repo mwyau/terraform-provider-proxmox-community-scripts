@@ -371,24 +371,39 @@ func TestUpdateDetectsUnexpectedHardwareMutation(t *testing.T) {
 	}
 }
 
-func TestJournalNeverPersistsScriptVars(t *testing.T){
- r,f:=newFake(t)
- req:=request("create")
- req.ScriptVars=map[string]string{"APP_SECRET":"credential-not-for-disk"}
- req.Settings=map[string]string{"http_proxy":"http://private-proxy"}
- result,e:=r.Handle(context.Background(),req)
- if e!=nil||result.Status!="verified"{t.Fatalf("create: %v %+v",e,result)}
- if f.lastEnv["APP_SECRET"]!="credential-not-for-disk"{t.Fatal("script_vars were not delivered")}
- saved,e:=os.ReadFile(r.journalPath(req));if e!=nil{t.Fatal(e)}
- if strings.Contains(string(saved),"credential-not-for-disk")||strings.Contains(string(saved),"private-proxy"){t.Fatal("journal leaked user input or secrets")}
+func TestJournalNeverPersistsScriptVars(t *testing.T) {
+	r, f := newFake(t)
+	req := request("create")
+	req.ScriptVars = map[string]string{"APP_SECRET": "credential-not-for-disk"}
+	req.Settings = map[string]string{"http_proxy": "http://private-proxy"}
+	result, e := r.Handle(context.Background(), req)
+	if e != nil || result.Status != "verified" {
+		t.Fatalf("create: %v %+v", e, result)
+	}
+	if f.lastEnv["APP_SECRET"] != "credential-not-for-disk" {
+		t.Fatal("script_vars were not delivered")
+	}
+	saved, e := os.ReadFile(r.journalPath(req))
+	if e != nil {
+		t.Fatal(e)
+	}
+	if strings.Contains(string(saved), "credential-not-for-disk") || strings.Contains(string(saved), "private-proxy") {
+		t.Fatal("journal leaked user input or secrets")
+	}
 }
-func TestVMNormalizedSettingsPassedWithoutRawOverrides(t *testing.T){
- r,f:=newFake(t);f.kind="vm"
- req:=request("create");req.Kind="vm"
- req.Settings=map[string]string{"disk_size":"8","cpu_type":"host","machine":"q35","start":"false","disk_cache":"none"}
- got,e:=r.Handle(context.Background(),req)
- if e!=nil||got.Status!="verified"{t.Fatalf("create %v %+v",e,got)}
- for k,v:=range map[string]string{"VM_DISK_SIZE":"8G","VM_CPU":"host","VM_MACHINE":"q35","VM_START":"no","VM_DISK_CACHE":"cache=none,"}{
-  if f.lastEnv[k]!=v{t.Fatalf("%s: got %q want %q",k,f.lastEnv[k],v)}
- }
+func TestVMNormalizedSettingsPassedWithoutRawOverrides(t *testing.T) {
+	r, f := newFake(t)
+	f.kind = "vm"
+	req := request("create")
+	req.Kind = "vm"
+	req.Settings = map[string]string{"disk_size": "8", "cpu_type": "host", "machine": "q35", "start": "false", "disk_cache": "none"}
+	got, e := r.Handle(context.Background(), req)
+	if e != nil || got.Status != "verified" {
+		t.Fatalf("create %v %+v", e, got)
+	}
+	for k, v := range map[string]string{"VM_DISK_SIZE": "8G", "VM_CPU": "host", "VM_MACHINE": "q35", "VM_START": "no", "VM_DISK_CACHE": "cache=none,"} {
+		if f.lastEnv[k] != v {
+			t.Fatalf("%s: got %q want %q", k, f.lastEnv[k], v)
+		}
+	}
 }

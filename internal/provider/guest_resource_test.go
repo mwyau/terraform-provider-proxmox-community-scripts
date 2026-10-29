@@ -1,9 +1,9 @@
 package provider
 
 import (
+	"context"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"testing"
- "context"
 )
 
 func TestModelValidation(t *testing.T) {
@@ -28,23 +28,38 @@ func TestNoDefaultDelete(t *testing.T) {
 	}
 }
 
-func TestCreationOptionsMatchAnsiblePrecedence(t *testing.T){
- ctx:=context.Background()
- defaults,ds:=types.MapValueFrom(ctx,types.MapType{ElemType:types.StringType},
-  map[string]map[string]string{"all":{"cores":"2","memory":"1024"},"lxc":{"memory":"2048","os":"debian"}})
- if ds.HasError(){t.Fatalf("defaults: %v",ds)}
- settings,ds:=types.MapValueFrom(ctx,types.StringType,map[string]string{"cores":"4"})
- if ds.HasError(){t.Fatalf("settings: %v",ds)}
- vars,ds:=types.MapValueFrom(ctx,types.StringType,map[string]string{"APP_OPTION":"yes"})
- if ds.HasError(){t.Fatalf("script_vars: %v",ds)}
- m:=guestModel{Kind:types.StringValue("lxc"),Settings:settings,GuestDefaults:defaults,ScriptVars:vars}
- effective,extras,e:=m.creationOptions(ctx)
- if e!=nil{t.Fatal(e)}
- if effective["cores"]!="4"||effective["memory"]!="2048"||effective["os"]!="debian"||extras["APP_OPTION"]!="yes"{t.Fatalf("unexpected effective creation options %v extras %v",effective,extras)}
+func TestCreationOptionsMatchAnsiblePrecedence(t *testing.T) {
+	ctx := context.Background()
+	defaults, ds := types.MapValueFrom(ctx, types.MapType{ElemType: types.StringType},
+		map[string]map[string]string{"all": {"cores": "2", "memory": "1024"}, "lxc": {"memory": "2048", "os": "debian"}})
+	if ds.HasError() {
+		t.Fatalf("defaults: %v", ds)
+	}
+	settings, ds := types.MapValueFrom(ctx, types.StringType, map[string]string{"cores": "4"})
+	if ds.HasError() {
+		t.Fatalf("settings: %v", ds)
+	}
+	vars, ds := types.MapValueFrom(ctx, types.StringType, map[string]string{"APP_OPTION": "yes"})
+	if ds.HasError() {
+		t.Fatalf("script_vars: %v", ds)
+	}
+	m := guestModel{Kind: types.StringValue("lxc"), Settings: settings, GuestDefaults: defaults, ScriptVars: vars}
+	effective, extras, e := m.creationOptions(ctx)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if effective["cores"] != "4" || effective["memory"] != "2048" || effective["os"] != "debian" || extras["APP_OPTION"] != "yes" {
+		t.Fatalf("unexpected effective creation options %v extras %v", effective, extras)
+	}
 }
-func TestUpdateBackupNamingCompatibility(t *testing.T){
- m:=guestModel{UpdateBackup:types.StringValue("backup"),Backup:types.StringNull()}
- v,e:=m.backupStorage();if e!=nil||v!="backup"{t.Fatalf("canonical: %s %v",v,e)}
- m.Backup=types.StringValue("legacy")
- if _,e=m.backupStorage();e==nil{t.Fatal("both aliases must fail")}
+func TestUpdateBackupNamingCompatibility(t *testing.T) {
+	m := guestModel{UpdateBackup: types.StringValue("backup"), Backup: types.StringNull()}
+	v, e := m.backupStorage()
+	if e != nil || v != "backup" {
+		t.Fatalf("canonical: %s %v", v, e)
+	}
+	m.Backup = types.StringValue("legacy")
+	if _, e = m.backupStorage(); e == nil {
+		t.Fatal("both aliases must fail")
+	}
 }
