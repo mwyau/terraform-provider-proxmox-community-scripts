@@ -74,8 +74,13 @@ def main():
     ansible_keys=exposed_keys(ansible_defaults)
     if not expected.issubset(ansible_keys):
         raise SystemExit("Ansible facade missing inputs: "+str(sorted(expected-ansible_keys)))
-    if "ctid" in ansible_keys:
-        raise SystemExit("Legacy Ansible CTID alias was reintroduced")
-    print("Shared v1 contract parity: 34 LXC, 14 VM; both public facades; no aliases.")
+    if not {"ctid","vmid"}.issubset(ansible_keys):
+        raise SystemExit("Missing required kind-specific CTID/VMID input in Ansible")
+    role=retrieve(a.ansible_ref,"roles/application/tasks/main.yml")
+    if "kind == 'lxc' and ctid is not none and vmid is none" not in role or "kind == 'vm' and vmid is not none and ctid is none" not in role:
+        raise SystemExit("Ansible must enforce mutually exclusive CTID and VMID")
+    if 'm.CTID.IsNull()' not in resource or 'm.VMID.IsNull()' not in resource:
+        raise SystemExit("Terraform must enforce mutually exclusive CTID and VMID")
+    print("Shared v1 contract parity: 34 LXC, 14 VM; typed CTID/VMID inputs; no deprecated aliases.")
 if __name__=="__main__":
     main()
