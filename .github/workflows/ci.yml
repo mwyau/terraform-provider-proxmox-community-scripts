@@ -24,6 +24,8 @@ jobs:
         run: go test -race ./...
       - name: Build
         run: go build ./...
+      - name: Check normalized contract against Ansible feature branch
+        run: python3 scripts/check_ansible_contract.py
       - uses: hashicorp/setup-terraform@v3
       - name: Validate Terraform examples against development provider
         shell: bash
@@ -46,4 +48,8 @@ jobs:
             (cd "$RUNNER_TEMP/validate-example" && terraform init -backend=false -input=false >/dev/null && terraform validate)
             rm -rf "$RUNNER_TEMP/validate-example"
           done
+          mkdir -p "$RUNNER_TEMP/plan-verify"
+          cp examples/plan-verify.tf "$RUNNER_TEMP/plan-verify/main.tf"
+          (cd "$RUNNER_TEMP/plan-verify" && terraform init -backend=false -input=false >/dev/null && terraform plan -input=false -lock=false -no-color > "$RUNNER_TEMP/plan-result.txt")
+          grep -q 'communityscripts_guest.inspect_only' "$RUNNER_TEMP/plan-result.txt"
 
