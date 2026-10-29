@@ -7,7 +7,6 @@ import (
  "net/url"
  "regexp"
  "strconv"
- "strings"
 )
 var sizeRE=regexp.MustCompile(`(?:^|,)size=([0-9]+(?:\.[0-9]+)?)([KMGT]?)(?:,|$)`)
 var diskKeyRE=regexp.MustCompile(`^(?:scsi[0-9]+|virtio[0-9]+|sata[0-9]+|ide[0-9]+)$`)
