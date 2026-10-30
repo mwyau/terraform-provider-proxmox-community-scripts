@@ -68,19 +68,19 @@ def main():
     expected=set(canonical["common_inputs"])
     if not expected.issubset(go_keys):
         raise SystemExit("Terraform schema missing canonical inputs: "+str(sorted(expected-go_keys)))
-    if re.search(r'^\s*"(?:endpoint|insecure|backup_storage)":\s+schema\.',provider+"\n"+resource,re.M):
+    if re.search(r'^\s*"(?:api_host|api_token_id|api_token_secret|validate_certs|ctid|vmid|node|backup_storage)":\s+schema\.',provider+"\n"+resource,re.M):
         raise SystemExit("Legacy Terraform alias was reintroduced")
     ansible_defaults=retrieve(a.ansible_ref,"roles/application/defaults/main.yml")
     ansible_keys=exposed_keys(ansible_defaults)
     if not expected.issubset(ansible_keys):
         raise SystemExit("Ansible facade missing inputs: "+str(sorted(expected-ansible_keys)))
-    if not {"ctid","vmid"}.issubset(ansible_keys):
-        raise SystemExit("Missing required kind-specific CTID/VMID input in Ansible")
+    if "vm_id" not in ansible_keys:
+        raise SystemExit("Missing shared bpg-style vm_id in Ansible")
     role=retrieve(a.ansible_ref,"roles/application/tasks/main.yml")
-    if "kind == 'lxc' and ctid is not none and vmid is none" not in role or "kind == 'vm' and vmid is not none and ctid is none" not in role:
-        raise SystemExit("Ansible must enforce mutually exclusive CTID and VMID")
-    if 'm.CTID.IsNull()' not in resource or 'm.VMID.IsNull()' not in resource:
-        raise SystemExit("Terraform must enforce mutually exclusive CTID and VMID")
-    print("Shared v1 contract parity: 34 LXC, 14 VM; typed CTID/VMID inputs; no deprecated aliases.")
+    if '_cs_guest_id: "{{ vm_id }}"' not in role or "vm_id is not none" not in role:
+        raise SystemExit("Ansible facade must normalize vm_id for either guest kind")
+    if 'm.VMID.IsNull()' not in resource:
+        raise SystemExit("Terraform must require vm_id")
+    print("Shared v1 contract parity: 34 LXC, 14 VM; bpg-aligned vm_id for both guest kinds; no deprecated aliases.")
 if __name__=="__main__":
     main()

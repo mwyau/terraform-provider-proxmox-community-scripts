@@ -93,3 +93,7 @@ For a VMID declared in Terraform, use Terraform for create, hardware changes, up
 ### Kind-specific creation identifiers
 
 Set `ctid` for `kind="lxc"`, or `vmid` for `kind="vm"`; never both. The upstream LXC Core uses `var_ctid`, while PVE APIs use the cluster-scoped numeric VMID internally. Terraform's `id` is **computed** as `lxc/120` or `vm/121` for state and import, not a user-provided creation alias. This matches the Ansible public application role.
+
+
+## bpg/proxmox-aligned public conventions (October 2026)
+The current public provider/facade inputs are `endpoint`, `api_token` (combined `user@realm!tokenid=secret`), `insecure` (false unless explicitly set), `node_name`, and **one `vm_id` for LXC and VM alike**. The normalized creation `settings` names `datastore_id`, `vlan_id`, `mac_address`, `unprivileged`, and VM `started` translate to their respective upstream Core variables. Internal Ansible modules use native API arguments; both external interfaces reject superseded names. Provider `ssh_target`, creation pins, script variables, and approval gates remain Community Scripts-specific. `settings` remains a flat typed-as-string creation map, **not** a clone of bpg's separate disk/network/CPU blocks. This section supersedes older descriptions of `ctid`/`vmid` or separate provider tokens.

@@ -24,3 +24,7 @@ The only common public parameter names are defined by the versioned `contracts/g
 Canonical contract: `mwyau/ansible-proxmox-community-scripts/contracts/guest.v1.json`, current schema v1. Terraform mirrors that file and validates both source mappings and public APIs in CI; the Ansible repository tests its own adapter against the same contract. Update both in paired PRs. Once published, pin contract versions to immutable release tags rather than development branch names. A breaking change increments the contract version, with no deprecated aliases retained in this pre-release stage.
 
 No live Proxmox integration has been completed for this workflow.
+
+
+## bpg/proxmox-aligned public conventions (October 2026)
+The current public provider/facade inputs are `endpoint`, `api_token` (combined `user@realm!tokenid=secret`), `insecure` (false unless explicitly set), `node_name`, and **one `vm_id` for LXC and VM alike**. The normalized creation `settings` names `datastore_id`, `vlan_id`, `mac_address`, `unprivileged`, and VM `started` translate to their respective upstream Core variables. Internal Ansible modules use native API arguments; both external interfaces reject superseded names. Provider `ssh_target`, creation pins, script variables, and approval gates remain Community Scripts-specific. `settings` remains a flat typed-as-string creation map, **not** a clone of bpg's separate disk/network/CPU blocks. This section supersedes older descriptions of `ctid`/`vmid` or separate provider tokens.

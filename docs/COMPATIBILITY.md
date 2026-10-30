@@ -85,3 +85,7 @@ Provider `settings` and `script_vars` are string maps. Use `"2048"` or `"true"` 
 ## Remaining release gaps
 
 The CI plan-time inspector does not validate PVE storage, bridge, VLAN existence, hardware restart behavior, selected application's interactive flows, Cloud-Init VM-specific hooks, or all external installer dependencies. Runtime execution, updates, and deletion must be tested on disposable Proxmox before release. Existing guest import still requires identity evidence; unknown or contradictory provenance is not silently overridden. LXC `swap` and VM `sockets` are Ansible *reconcile-only* options, not part of the 34/14 normalized creation mapping; Terraform support remains a separate task.
+
+
+## bpg/proxmox-aligned public conventions (October 2026)
+The current public provider/facade inputs are `endpoint`, `api_token` (combined `user@realm!tokenid=secret`), `insecure` (false unless explicitly set), `node_name`, and **one `vm_id` for LXC and VM alike**. The normalized creation `settings` names `datastore_id`, `vlan_id`, `mac_address`, `unprivileged`, and VM `started` translate to their respective upstream Core variables. Internal Ansible modules use native API arguments; both external interfaces reject superseded names. Provider `ssh_target`, creation pins, script variables, and approval gates remain Community Scripts-specific. `settings` remains a flat typed-as-string creation map, **not** a clone of bpg's separate disk/network/CPU blocks. This section supersedes older descriptions of `ctid`/`vmid` or separate provider tokens.

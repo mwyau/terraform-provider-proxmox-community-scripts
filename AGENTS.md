@@ -48,3 +48,7 @@ Goal: manage Proxmox Community Scripts LXC/VM guests natively through Terraform/
 - Terraform `id` remains computed, type-qualified (`lxc/120` or `vm/121`); never expose it as a third public creation key. Update v1 contract, tests, CI and examples together.
 
 - Cross-repository CI MUST use the immutable commit from `contracts/ansible.sha`, not a moving feature branch. Update the SHA and mirrored JSON as one reviewed change whenever the contract evolves; use `--ansible-ref <SHA>` for a one-time audit.
+
+
+## bpg/proxmox-aligned public conventions (October 2026)
+The current public provider/facade inputs are `endpoint`, `api_token` (combined `user@realm!tokenid=secret`), `insecure` (false unless explicitly set), `node_name`, and **one `vm_id` for LXC and VM alike**. The normalized creation `settings` names `datastore_id`, `vlan_id`, `mac_address`, `unprivileged`, and VM `started` translate to their respective upstream Core variables. Internal Ansible modules use native API arguments; both external interfaces reject superseded names. Provider `ssh_target`, creation pins, script variables, and approval gates remain Community Scripts-specific. `settings` remains a flat typed-as-string creation map, **not** a clone of bpg's separate disk/network/CPU blocks. This section supersedes older descriptions of `ctid`/`vmid` or separate provider tokens.

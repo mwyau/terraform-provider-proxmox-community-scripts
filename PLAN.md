@@ -52,3 +52,7 @@ The shared contract requires `ctid` for LXC or `vmid` for VM, mutually exclusive
 
 ## Reproducible cross-repo validation
 Terraform CI pins the exact Ansible commit through `contracts/ansible.sha`. This prevents incoherent moving-branch reads while both PRs are being updated. Bump this SHA and the JSON mirror together for each coordinated contract change. Tests compare implementation maps and public names against the pinned Ansible source; no runtime cross-repo dependency is added.
+
+
+## bpg/proxmox-aligned public conventions (October 2026)
+The current public provider/facade inputs are `endpoint`, `api_token` (combined `user@realm!tokenid=secret`), `insecure` (false unless explicitly set), `node_name`, and **one `vm_id` for LXC and VM alike**. The normalized creation `settings` names `datastore_id`, `vlan_id`, `mac_address`, `unprivileged`, and VM `started` translate to their respective upstream Core variables. Internal Ansible modules use native API arguments; both external interfaces reject superseded names. Provider `ssh_target`, creation pins, script variables, and approval gates remain Community Scripts-specific. `settings` remains a flat typed-as-string creation map, **not** a clone of bpg's separate disk/network/CPU blocks. This section supersedes older descriptions of `ctid`/`vmid` or separate provider tokens.

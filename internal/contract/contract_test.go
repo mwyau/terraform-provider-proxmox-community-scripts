@@ -22,7 +22,7 @@ func TestMappingsAndConversions(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	want := map[string]string{"var_cpu": "2", "var_ram": "2048", "var_unprivileged": "0", "var_nesting": "0", "var_tun": "yes", "APP_OPTION": "x"}
+	want := map[string]string{"var_cpu": "2", "var_ram": "2048", "var_unprivileged": "1", "var_nesting": "0", "var_tun": "yes", "APP_OPTION": "x"}
 	if !reflect.DeepEqual(env, want) {
 		t.Fatalf("got %v, want %v", env, want)
 	}
