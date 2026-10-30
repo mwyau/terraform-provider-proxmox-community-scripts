@@ -1,5 +1,7 @@
 // Package compat performs bounded, read-only inspection of pinned Community Scripts
 // source during Terraform planning. It never runs shell scripts.
+// Bulk recipe reports belong to proxmox-community-scripts-iac-common; this
+// independent per-guest check must fail closed regardless of cached status.
 package compat
 
 import (
@@ -140,7 +142,7 @@ func (c Inspector) Verify(ctx context.Context, kind, script, scriptsRef, coreRef
 	}
 	if kind == "vm" {
 		for key := range settings {
-			variable := map[string]string{"cores": "CORE_COUNT", "memory": "RAM_SIZE", "disk_size": "DISK_SIZE", "hostname": "HN", "bridge": "BRG", "vlan": "VLAN", "storage": "STORAGE", "mac": "MAC", "mtu": "MTU", "cpu_type": "CPU_TYPE", "machine": "MACHINE", "start": "vm_start_vm", "disk_cache": "DISK_CACHE", "timezone": "vm_timezone_default"}[key]
+			variable := map[string]string{"cores": "CORE_COUNT", "memory": "RAM_SIZE", "disk_size": "DISK_SIZE", "hostname": "HN", "bridge": "BRG", "vlan_id": "VLAN", "datastore_id": "STORAGE", "mac_address": "MAC", "mtu": "MTU", "cpu_type": "CPU_TYPE", "machine": "MACHINE", "started": "vm_start_vm", "disk_cache": "DISK_CACHE", "timezone": "vm_timezone_default"}[key]
 			if variable != "" && !strings.Contains(scriptText, variable) {
 				result.Notes = append(result.Notes, fmt.Sprintf("VM field %s lacks per-script usage evidence (%s); shared Core support is not sufficient", key, variable))
 			}

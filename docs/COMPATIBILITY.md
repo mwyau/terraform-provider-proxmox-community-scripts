@@ -89,3 +89,9 @@ The CI plan-time inspector does not validate PVE storage, bridge, VLAN existence
 
 ## bpg/proxmox-aligned public conventions (October 2026)
 The current public provider/facade inputs are `endpoint`, `api_token` (combined `user@realm!tokenid=secret`), `insecure` (false unless explicitly set), `node_name`, and **one `vm_id` for LXC and VM alike**. The normalized creation `settings` names `datastore_id`, `vlan_id`, `mac_address`, `unprivileged`, and VM `started` translate to their respective upstream Core variables. Internal Ansible modules use native API arguments; both external interfaces reject superseded names. Provider `ssh_target`, creation pins, script variables, and approval gates remain Community Scripts-specific. `settings` remains a flat typed-as-string creation map, **not** a clone of bpg's separate disk/network/CPU blocks. This section supersedes older descriptions of `ctid`/`vmid` or separate provider tokens.
+
+
+## Shared recipe scan and advisory status
+The read-only upstream recipe scanner, retirement reports and advisory `recipes.json` status index now live in [proxmox-community-scripts-iac-common](https://github.com/mwyau/proxmox-community-scripts-iac-common/tree/feat/recipe-scanner-status). Each scan records the exact ProxmoxVE and Core Git revisions and potential prompts/VM field references. A scan result does **not** certify successful unattended installation.
+
+The Terraform provider intentionally retains `internal/compat` as an independent per-guest, pinned-source, fail-closed check during planning. It does not download or trust a moving recipe status file before installation. Never treat an advisory status as a replacement for source checks or explicit approval of root script execution. No shared Python package or external runtime service is required.

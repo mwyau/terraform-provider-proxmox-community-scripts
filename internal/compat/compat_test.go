@@ -51,8 +51,8 @@ func TestMissingSharedCoreVariable(t *testing.T) {
 	}
 }
 func TestVMWarnings(t *testing.T) {
-	inspector := fake(t, "source pve/vm-core.func\nvm_start_script\n", "vm_apply_env_overrides() { } VM_UNATTENDED VM_RAM")
-	r, e := inspector.Verify(context.Background(), "vm", "ubuntu-vm", A, B, map[string]string{"memory": "2048"})
+	inspector := fake(t, "source pve/vm-core.func\nvm_start_script\n", "vm_apply_env_overrides() { } VM_UNATTENDED VM_STORAGE")
+	r, e := inspector.Verify(context.Background(), "vm", "ubuntu-vm", A, B, map[string]string{"datastore_id": "local-lvm"})
 	if e != nil {
 		t.Fatal(e)
 	}
