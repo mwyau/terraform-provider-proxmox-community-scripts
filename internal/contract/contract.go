@@ -18,16 +18,16 @@ var LXCFields = map[string]string{
 	"disk_size":        "var_disk",
 	"hostname":         "var_hostname",
 	"bridge":           "var_brg",
-	"vlan":             "var_vlan",
-	"storage":          "var_container_storage",
+	"vlan_id":             "var_vlan",
+	"datastore_id":          "var_container_storage",
 	"template_storage": "var_template_storage",
 	"os":               "var_os",
 	"os_version":       "var_version",
-	"privileged":       "var_unprivileged",
+	"unprivileged":       "var_unprivileged",
 	"ipv4":             "var_net",
 	"gateway":          "var_gateway",
 	"ipv6_method":      "var_ipv6_method",
-	"mac":              "var_mac",
+	"mac_address":              "var_mac",
 	"mtu":              "var_mtu",
 	"dns":              "var_ns",
 	"searchdomain":     "var_searchdomain",
@@ -54,13 +54,13 @@ var VMFields = map[string]string{
 	"disk_size":  "VM_DISK_SIZE",
 	"hostname":   "VM_HOSTNAME",
 	"bridge":     "VM_BRIDGE",
-	"vlan":       "VM_VLAN",
-	"storage":    "VM_STORAGE",
-	"mac":        "VM_MAC",
+	"vlan_id":       "VM_VLAN",
+	"datastore_id":    "VM_STORAGE",
+	"mac_address":        "VM_MAC",
 	"mtu":        "VM_MTU",
 	"cpu_type":   "VM_CPU",
 	"machine":    "VM_MACHINE",
-	"start":      "VM_START",
+	"started":      "VM_START",
 	"disk_cache": "VM_DISK_CACHE",
 	"timezone":   "VM_TIMEZONE",
 }
@@ -122,7 +122,7 @@ func numericSetting(k, v string) error {
 		if n < 1 || n > 100000 {
 			return errors.New("disk_size must be 1..100000 GiB")
 		}
-	case "vlan":
+	case "vlan_id":
 		if n < 1 || n > 4094 {
 			return errors.New("vlan must be 1..4094; omit for untagged")
 		}
@@ -149,11 +149,11 @@ func ValidateSettings(kind string, values map[string]string) error {
 			return fmt.Errorf("%s contains forbidden control characters or exceeds size limit", k)
 		}
 		switch k {
-		case "cores", "memory", "disk_size", "vlan", "mtu":
+		case "cores", "memory", "disk_size", "vlan_id", "mtu":
 			if e := numericSetting(k, v); e != nil {
 				return e
 			}
-		case "privileged", "start", "nesting", "keyctl", "mknod", "tun", "fuse", "protection", "gpu", "apt_cacher", "inherit_host_ca":
+		case "unprivileged", "started", "nesting", "keyctl", "mknod", "tun", "fuse", "protection", "gpu", "apt_cacher", "inherit_host_ca":
 			if _, e := normalizedBoolean(v); e != nil {
 				return fmt.Errorf("%s: %w", k, e)
 			}
@@ -171,7 +171,7 @@ func ValidateSettings(kind string, values map[string]string) error {
 			if _, e := netip.ParseAddr(v); e != nil {
 				return fmt.Errorf("%s must be an IP address", k)
 			}
-		case "mac":
+		case "mac_address":
 			if _, e := net.ParseMAC(v); e != nil {
 				return fmt.Errorf("invalid MAC: %w", e)
 			}
@@ -211,7 +211,7 @@ func ValidateSettings(kind string, values map[string]string) error {
 			if v != "none" && v != "writethrough" {
 				return errors.New("disk_cache must be none or writethrough")
 			}
-		case "bridge", "storage", "template_storage", "sdn_vnet":
+		case "bridge", "datastore_id", "template_storage", "sdn_vnet":
 			if !shortName.MatchString(v) {
 				return fmt.Errorf("%s is invalid", k)
 			}
@@ -285,14 +285,14 @@ func Environment(kind string, settings, vars map[string]string) (map[string]stri
 	for k, v := range settings {
 		key := fields[k]
 		switch k {
-		case "privileged":
+		case "unprivileged":
 			b, _ := normalizedBoolean(v)
 			if b {
-				env[key] = "0"
-			} else {
 				env[key] = "1"
+			} else {
+				env[key] = "0"
 			}
-		case "start", "tun", "fuse", "protection", "gpu", "apt_cacher", "inherit_host_ca":
+		case "started", "tun", "fuse", "protection", "gpu", "apt_cacher", "inherit_host_ca":
 			b, _ := normalizedBoolean(v)
 			if b {
 				env[key] = "yes"

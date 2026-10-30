@@ -6,11 +6,7 @@ terraform {
     }
   }
 }
-variable "api_token_id" {
-  type      = string
-  sensitive = true
-}
-variable "api_token_secret" {
+variable "api_token" {
   type      = string
   sensitive = true
 }
@@ -21,15 +17,13 @@ variable "core_sha" {
   type = string
 }
 provider "communityscripts" {
-  api_host = "https://pve1.example.internal:8006"
-  api_token_id     = var.api_token_id
-  api_token_secret = var.api_token_secret
+  endpoint = "https://pve1.example.internal:8006"
+  api_token = var.api_token
   ssh_target       = "automation@pve1.example.internal"
-  validate_certs   = true
 }
 resource "communityscripts_guest" "adguard" {
-  node   = "pve1"
-  ctid   = 120
+  node_name = "pve1"
+  vm_id = 120
   kind   = "lxc"
   script = "adguard"
 
@@ -46,7 +40,7 @@ resource "communityscripts_guest" "adguard" {
     memory    = "2048"
     disk_size = "8"
     bridge    = "vmbr0"
-    storage   = "local-lvm"
+    datastore_id = "local-lvm"
   }
 
   # Optional application-specific variables, validated and passed only at creation.

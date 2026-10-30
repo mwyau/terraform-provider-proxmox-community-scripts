@@ -18,15 +18,14 @@ variable "proxmox_api_token_secret" {
 }
 
 provider "communityscripts" {
-  api_host = "https://pve.example.net:8006"
-  api_token_id     = var.proxmox_api_token_id
-  api_token_secret = var.proxmox_api_token_secret
+  endpoint = "https://pve.example.net:8006"
+  api_token = var.api_token
 }
 
 resource "communityscripts_guest" "adguard" {
-  node   = "pve1"
+  node_name = "pve1"
   kind   = "lxc"
-  ctid   = 120
+  vm_id = 120
   script = "adguard"
 
   deletion_policy = "retain"

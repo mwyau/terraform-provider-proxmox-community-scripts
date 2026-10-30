@@ -7,7 +7,7 @@ import (
 )
 
 func TestModelValidation(t *testing.T) {
-	m := guestModel{Node: types.StringValue("pve1"), Kind: types.StringValue("lxc"), CTID: types.Int64Value(120), Script: types.StringValue("adguard"), DeletionPolicy: types.StringValue("retain")}
+	m := guestModel{Node: types.StringValue("pve1"), Kind: types.StringValue("lxc"), VMID: types.Int64Value(120), Script: types.StringValue("adguard"), DeletionPolicy: types.StringValue("retain")}
 	if e := m.validate(); e != nil {
 		t.Fatal(e)
 	}
@@ -16,7 +16,7 @@ func TestModelValidation(t *testing.T) {
 		t.Fatal("bad destroy policy accepted")
 	}
 	m.DeletionPolicy = types.StringNull()
-	m.CTID = types.Int64Value(12)
+	m.VMID = types.Int64Value(12)
 	if e := m.validate(); e == nil {
 		t.Fatal("bad VMID accepted")
 	}
@@ -60,35 +60,13 @@ func TestCanonicalUpdateBackupStorage(t *testing.T) {
 	}
 }
 
-func TestKindSpecificIDs(t *testing.T) {
-	base := guestModel{Node: types.StringValue("pve1"), Kind: types.StringValue("lxc"), CTID: types.Int64Value(120), Script: types.StringValue("adguard")}
-	if e := base.validate(); e != nil {
-		t.Fatal(e)
-	}
-	if base.id().String() != "lxc/120" {
-		t.Fatalf("wrong LXC state ID %s", base.id().String())
-	}
-	base.VMID = types.Int64Value(121)
-	if e := base.validate(); e == nil {
-		t.Fatal("accepted CTID and VMID together")
-	}
-	base.CTID = types.Int64Null()
-	if e := base.validate(); e == nil {
-		t.Fatal("accepted VMID for LXC")
-	}
-	base.Kind = types.StringValue("vm")
-	if e := base.validate(); e != nil {
-		t.Fatal(e)
-	}
-	if base.id().String() != "vm/121" {
-		t.Fatalf("wrong VM state ID %s", base.id().String())
-	}
-	base.CTID = types.Int64Value(120)
-	if e := base.validate(); e == nil {
-		t.Fatal("accepted CTID on VM")
-	}
-	base.VMID = types.Int64Null()
-	if e := base.validate(); e == nil {
-		t.Fatal("accepted VM without VMID")
-	}
+func TestBothKindsUseVMID(t *testing.T) {
+ m:=guestModel{Node:types.StringValue("pve1"),Kind:types.StringValue("lxc"),VMID:types.Int64Value(120),Script:types.StringValue("adguard")}
+ if e:=m.validate();e!=nil{t.Fatal(e)}
+ if m.id().String()!="lxc/120"{t.Fatal(m.id())}
+ m.Kind=types.StringValue("vm")
+ if e:=m.validate();e!=nil{t.Fatal(e)}
+ if m.id().String()!="vm/120"{t.Fatal(m.id())}
+ m.VMID=types.Int64Null()
+ if e:=m.validate();e==nil{t.Fatal("missing vm_id accepted")}
 }

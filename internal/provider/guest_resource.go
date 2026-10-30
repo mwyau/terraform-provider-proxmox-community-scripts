@@ -31,10 +31,9 @@ func (r *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 		MarkdownDescription: "Managed Community Scripts guest. Creation uses an audited root runner and durable journal. Destroy retains the guest by default. Only CPU/memory and explicit LXC update requests are mutable.",
 		Attributes: map[string]schema.Attribute{
 			"id":                        schema.StringAttribute{Computed: true, MarkdownDescription: "kind/vmid identity."},
-			"node":                      schema.StringAttribute{Required: true},
+			"node_name":                 schema.StringAttribute{Required: true},
 			"kind":                      schema.StringAttribute{Required: true, MarkdownDescription: "lxc or vm"},
-			"ctid":                      schema.Int64Attribute{Optional: true, MarkdownDescription: "LXC container ID; required when kind=lxc and forbidden when kind=vm."},
-			"vmid":                      schema.Int64Attribute{Optional: true, MarkdownDescription: "VM ID; required when kind=vm and forbidden when kind=lxc."},
+			"vm_id":                     schema.Int64Attribute{Required: true, MarkdownDescription: "Cluster-global Proxmox ID for LXC and VM."},
 			"script":                    schema.StringAttribute{Required: true},
 			"status":                    schema.StringAttribute{Computed: true},
 			"scripts_ref":               schema.StringAttribute{Optional: true, MarkdownDescription: "Immutable 40-char Community Scripts commit used only at creation."},
@@ -56,10 +55,9 @@ func (r *GuestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 
 type guestModel struct {
 	ID                   types.String `tfsdk:"id"`
-	Node                 types.String `tfsdk:"node"`
+	Node                 types.String `tfsdk:"node_name"`
 	Kind                 types.String `tfsdk:"kind"`
-	CTID                 types.Int64  `tfsdk:"ctid"`
-	VMID                 types.Int64  `tfsdk:"vmid"`
+	VMID                 types.Int64  `tfsdk:"vm_id"`
 	Script               types.String `tfsdk:"script"`
 	Status               types.String `tfsdk:"status"`
 	ScriptsRef           types.String `tfsdk:"scripts_ref"`
@@ -78,12 +76,7 @@ type guestModel struct {
 	AllowImportedDestroy types.Bool   `tfsdk:"allow_imported_destroy"`
 }
 
-func (m guestModel) numericID() int64 {
-	if m.Kind.ValueString() == "lxc" {
-		return m.CTID.ValueInt64()
-	}
-	return m.VMID.ValueInt64()
-}
+func (m guestModel) numericID() int64 {return m.VMID.ValueInt64()}
 func (m guestModel) id() recovery.ID {
 	return recovery.ID{Kind: m.Kind.ValueString(), VMID: m.numericID()}
 }
@@ -149,18 +142,8 @@ func (m guestModel) validate() error {
 	if m.Node.IsNull() || m.Kind.IsNull() || m.Script.IsNull() {
 		return fmt.Errorf("node, kind and script must be set")
 	}
-	switch m.Kind.ValueString() {
-	case "lxc":
-		if m.CTID.IsNull() || m.CTID.IsUnknown() || !m.VMID.IsNull() {
-			return fmt.Errorf("LXC requires ctid and forbids vmid")
-		}
-	case "vm":
-		if m.VMID.IsNull() || m.VMID.IsUnknown() || !m.CTID.IsNull() {
-			return fmt.Errorf("VM requires vmid and forbids ctid")
-		}
-	default:
-		return fmt.Errorf("kind must be lxc or vm")
-	}
+	if m.Kind.ValueString()!="lxc" && m.Kind.ValueString()!="vm" {return fmt.Errorf("kind must be lxc or vm")}
+ if m.VMID.IsNull() || m.VMID.IsUnknown() {return fmt.Errorf("vm_id is required for LXC and VM")}
 	if _, e := recovery.ParseID(m.id().String()); e != nil {
 		return e
 	}
@@ -266,15 +249,11 @@ func (r *GuestResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		resp.Diagnostics.AddError("Guest kind conflicts with imported state", "Type in HCL does not match imported identity; retaining state.")
 		return
 	}
-	if id.Kind == "lxc" {
-		if !m.VMID.IsNull() || (!m.CTID.IsNull() && m.CTID.ValueInt64() != id.VMID) {
-			resp.Diagnostics.AddError("Conflicting CTID/VMID", "Imported LXC must use ctid only.")
-			return
-		}
-	} else if !m.CTID.IsNull() || (!m.VMID.IsNull() && m.VMID.ValueInt64() != id.VMID) {
-		resp.Diagnostics.AddError("Conflicting CTID/VMID", "Imported VM must use vmid only.")
-		return
-	}
+if !m.VMID.IsNull() && m.VMID.ValueInt64()!=id.VMID {
+  resp.Diagnostics.AddError("Conflicting vm_id", "Configured vm_id does not match imported identity.")
+  return
+ }
+
 	if g.Kind != id.Kind {
 		resp.Diagnostics.AddError("VMID collision", fmt.Sprintf("VMID %d is %s, not %s; retaining state.", id.VMID, g.Kind, id.Kind))
 		return
@@ -295,13 +274,7 @@ func (r *GuestResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	m.ID = types.StringValue(id.String())
 	m.Node = types.StringValue(g.Node)
 	m.Kind = types.StringValue(g.Kind)
-	if g.Kind == "lxc" {
-		m.CTID = types.Int64Value(g.VMID)
-		m.VMID = types.Int64Null()
-	} else {
-		m.VMID = types.Int64Value(g.VMID)
-		m.CTID = types.Int64Null()
-	}
+	m.VMID = types.Int64Value(g.VMID)
 	m.Script = types.StringValue(script)
 	m.Status = types.StringValue(g.Status)
 	// Refresh observed managed compute/disk values; do not synthesize creation-only defaults.
@@ -358,7 +331,7 @@ func (r *GuestResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		resp.Diagnostics.AddError("Invalid guest", e.Error())
 		return
 	}
-	if old.Kind != plan.Kind || old.VMID != plan.VMID || old.CTID != plan.CTID || old.Node != plan.Node || old.Script != plan.Script || old.ScriptsRef != plan.ScriptsRef || old.CoreRef != plan.CoreRef || old.DiskKey != plan.DiskKey || !old.ScriptVars.Equal(plan.ScriptVars) {
+	if old.Kind != plan.Kind || old.VMID != plan.VMID || old.Node != plan.Node || old.Script != plan.Script || old.ScriptsRef != plan.ScriptsRef || old.CoreRef != plan.CoreRef || old.DiskKey != plan.DiskKey || !old.ScriptVars.Equal(plan.ScriptVars) {
 		resp.Diagnostics.AddError("Immutable guest identity/source", "Changing node, VMID, kind, script_vars, disk key, or installation refs is not supported. Import or use an explicit migration plan.")
 		return
 	}

@@ -7,14 +7,13 @@ terraform {
   }
 }
 provider "communityscripts" {
-  api_host = "https://127.0.0.1:8006"
-  api_token_id     = "ci@pve!test"
-  api_token_secret = "unused-for-plan"
+  endpoint = "https://127.0.0.1:8006"
+  api_token = "ci@pve!test=unused-for-plan"
 }
 resource "communityscripts_guest" "inspect_only" {
-  node    = "pve1"
+  node_name = "pve1"
   kind    = "lxc"
-  ctid    = 120
+  vm_id = 120
   script  = "adguard"
 
   scripts_ref               = "bc6ab719828f9d52556af3a17ceff2f01c1a17d6"
