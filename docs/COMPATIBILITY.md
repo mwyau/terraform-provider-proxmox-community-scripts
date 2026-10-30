@@ -37,44 +37,44 @@ In particular, the `adguard` script has a `msg_menu` OS choice when `var_os` is 
 
 Terraform's plan-time inspector is deliberately narrower than the repository-wide Ansible scanner; it checks the *selected* pinned script and does not certify the full catalog. Keep both scanners and their results distinct. The provider must not treat source syntax checks as permission to execute arbitrary upstream code.
 
-## Public naming compatibility
+## Public naming compatibility (bpg/proxmox conventions)
 
-| Ansible collection | Terraform | Semantics |
-| --- | --- | --- |
-| `api_host` | Same | Proxmox HTTPS origin |
-| `api_token_id`, `api_token_secret` | Same | API credentials |
-| `validate_certs` | Same | Defaults to true; no inverse alias |
-| `kind`, `script`, `node` | Same | Guest type, script slug, chosen PVE node |
-| `ctid` (LXC) / `vmid` (VM) | Same | Exactly one required; Proxmox still uses a cluster-wide numeric VMID internally |
-| `scripts_ref`, `core_ref` | Same | Full immutable Git SHAs for creation |
-| `update_scripts_ref` | Same | Separate immutable source revision for application software-update requests |
-| `settings` | Same | Creation settings and explicit supported compute/disk updates |
-| `guest_defaults.all/lxc/vm` | Same | Applied **only at Create**, not reconciled into existing guests |
-| `script_vars` | Same | At most 64, 32 KiB; arbitrary valid app env names excluding protected/normalized Core names |
-| `accept_unverified_install` | Same | Approval to run third-party root scripts |
-| `disk_key` | Same | Disk chosen for grow-only operations |
-| `update_request_id` | Same | Explicit idempotency key |
-| `update_backup_storage` | Same | Update backup storage; no alias |
-| `ssh`, `cloud_init` | Not yet available | Requires secure host key staging, per-image support and real integration tests |
-| `script_override` | Not yet available | Unsafe identity overrides are deliberately refused |
-| `update_apply`, `update_backup`, `update_accept_no_backup` | Not exposed | Terraform change to a request ID triggers update; backup storage is mandatory |
-| `action=present/reconcile/update/inspect` | Native CRUD, plan and import | Terraform lifecycle is state-driven |
-| No delete action in Ansible facade | `deletion_policy`, `confirm_destroy` | Retain by default; destructive opt-in only |
+| Proxmox concept | Terraform guest resource | Ansible `application` facade | Notes |
+| --- | --- | --- | --- |
+| HTTPS origin | provider `endpoint` | `endpoint` | Same as bpg |
+| API token | provider `api_token` | `api_token` | Combined `user@realm!tokenid=secret`; sensitive |
+| TLS override | provider `insecure` | `insecure` | Default false; leave TLS verification enabled |
+| Node | `node_name` | `node_name` | Exact PVE node name |
+| Guest ID | `vm_id` | `vm_id` | One cluster-global ID for LXC or VM |
+| Guest kind / script | `kind`, `script` | Same | Community Scripts-specific selectors |
+| CPU/memory | `settings.cores`, `settings.memory` | Same | Flat creation map, MiB memory; not bpg nested CPU/memory blocks |
+| Root disk pool | `settings.datastore_id` | Same | Original Core storage variable |
+| Network | `settings.bridge`, `settings.vlan_id`, `settings.mac_address`, `settings.mtu` | Same | Single installer network interface |
+| LXC privilege | `settings.unprivileged` | Same | `true` maps to `var_unprivileged=1` |
+| VM start | `settings.started` | Same | Maps to Core `VM_START=yes/no` |
+| Source pins | `scripts_ref`, `core_ref` | Same | Immutable SHA for installation |
+| Software updates | `update_request_id`, `update_scripts_ref`, `update_backup_storage` | Same | Different lifecycle/approval semantics |
+| Installation variables | `settings`, `guest_defaults`, `script_vars` | Same | Protected script-specific overrides |
+| Guest access | Not yet implemented | `ssh`, `cloud_init` | Do not assume every VM supports Cloud-Init |
+| Adoption override | Not implemented | `script_override` | No automatic trust of unknown script provenance |
+| Lifecycle | Terraform CRUD/plan/import | `action=inspect/present/reconcile/update` | Never let both tools manage the same VMID |
+
+The Terraform provider uses `ssh_target` for a privileged single-host installation runner; this is **not** equivalent to bpg's general `ssh` configuration block. Terraform state `id` remains computed, e.g. `lxc/120`, while `vm_id = 120` is explicit input. Unlike bpg, this provider does not auto-allocate VM IDs or reproduce bpg's full Proxmox resource schema. Lower-level Ansible modules retain their established native module parameters, not the public facade names.
 
 ## Normalized creation keys — exact 34/14 mapping
 
 Both ecosystems use the *same normalized key* under `settings`, not the raw `var_*` / `VM_*` name. The Go contract maps the 34 LXC keys:
 
-`cores memory disk_size hostname bridge vlan storage template_storage os os_version privileged ipv4 gateway ipv6_method mac mtu dns searchdomain timezone tags protection nesting tun fuse keyctl gpu mknod mount_fs apt_cacher apt_cacher_ip inherit_host_ca sdn_vnet http_proxy http_no_proxy`
+`cores memory disk_size hostname bridge vlan_id datastore_id template_storage os os_version unprivileged ipv4 gateway ipv6_method mac_address mtu dns searchdomain timezone tags protection nesting tun fuse keyctl gpu mknod mount_fs apt_cacher apt_cacher_ip inherit_host_ca sdn_vnet http_proxy http_no_proxy`
 
 and the 14 VM keys:
 
-`cores memory disk_size hostname bridge vlan storage mac mtu cpu_type machine start disk_cache timezone`
+`cores memory disk_size hostname bridge vlan_id datastore_id mac_address mtu cpu_type machine started disk_cache timezone`
 
 to the Ansible Core environment mappings in `internal/contract/contract.go`. The canonical versioned specification is `contracts/guest.v1.json`, authored in the Ansible repository and copied here. `scripts/check_ansible_contract.py` verifies the JSON copies against the immutable Ansible SHA in `contracts/ansible.sha`, both source maps, both public schemas and the absence of temporary aliases on every Terraform CI run. Conversions also have shared golden tests.
 
 Important conversions:
-- LXC `privileged=true` means `var_unprivileged=0`; false means 1.
+- LXC `unprivileged=true` means `var_unprivileged=1`; false means 0.
 - LXC boolean toggles `tun`, `fuse`, etc. normalize to `yes/no`; flags `nesting`, `keyctl`, `mknod` use `1/0`.
 - VM `disk_size=8` becomes `VM_DISK_SIZE=8G`, and `disk_cache=none` becomes `VM_DISK_CACHE=cache=none,`.
 - No `var_*`, `VM_*` or host-control environment names may be passed through `script_vars` when a normalized field or engine control owns them.
