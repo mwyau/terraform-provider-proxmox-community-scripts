@@ -140,7 +140,7 @@ func newFake(t *testing.T) (*Runner, *fakePVE) {
 func TestCreateNoReplay(t *testing.T) {
 	r, f := newFake(t)
 	req := request("create")
-	req.Settings = map[string]string{"cores": "2", "memory": "2048", "storage": "local"}
+	req.Settings = map[string]string{"cores": "2", "memory": "2048", "datastore_id": "local"}
 	got, e := r.Handle(context.Background(), req)
 	if e != nil || got.Status != "verified" || f.creates != 1 {
 		t.Fatalf("first create = %+v, %v; count %d", got, e, f.creates)
@@ -302,7 +302,7 @@ func TestUnexpectedAdditionalVMIDUncertain(t *testing.T) {
 func TestMalformedNormalizedSettings(t *testing.T) {
 	for _, opts := range []map[string]string{
 		{"cores": "0"}, {"cores": "256"}, {"memory": "1"}, {"disk_size": "-1"},
-		{"vlan": "4095"}, {"bridge": "vmbr0;reboot"}, {"storage": "/tmp/x"},
+		{"vlan_id": "4095"}, {"bridge": "vmbr0;reboot"}, {"datastore_id": "/tmp/x"},
 		{"memory": "2048x"}, {"hostname": "foo bar"},
 	} {
 		q := request("create")
@@ -396,7 +396,7 @@ func TestVMNormalizedSettingsPassedWithoutRawOverrides(t *testing.T) {
 	f.kind = "vm"
 	req := request("create")
 	req.Kind = "vm"
-	req.Settings = map[string]string{"disk_size": "8", "cpu_type": "host", "machine": "q35", "start": "false", "disk_cache": "none"}
+	req.Settings = map[string]string{"disk_size": "8", "cpu_type": "host", "machine": "q35", "started": "false", "disk_cache": "none"}
 	got, e := r.Handle(context.Background(), req)
 	if e != nil || got.Status != "verified" {
 		t.Fatalf("create %v %+v", e, got)
