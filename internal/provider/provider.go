@@ -2,7 +2,7 @@ package provider
 
 import (
 	"context"
- "strings"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
@@ -27,17 +27,17 @@ func (p *CommunityScriptsProvider) Metadata(_ context.Context, _ provider.Metada
 }
 func (p *CommunityScriptsProvider) Schema(_ context.Context, _ provider.SchemaRequest, r *provider.SchemaResponse) {
 	r.Schema = schema.Schema{MarkdownDescription: "Community Scripts guest lifecycle. Privileged operations use a separately installed audited Proxmox runner.", Attributes: map[string]schema.Attribute{
-		"endpoint": schema.StringAttribute{Required: true, MarkdownDescription: "Proxmox HTTPS endpoint, bpg/proxmox-style."},
-        "api_token": schema.StringAttribute{Required: true, Sensitive: true, MarkdownDescription: "API token user@realm!tokenid=secret."},
-        "insecure": schema.BoolAttribute{Optional: true, MarkdownDescription: "Disable TLS validation; default false."},
-		"ssh_target":       schema.StringAttribute{Optional: true, MarkdownDescription: "SSH endpoint of the *single designated PVE coordinator*, including user if necessary. Requires root runner installed separately."},
+		"endpoint":   schema.StringAttribute{Required: true, MarkdownDescription: "Proxmox HTTPS endpoint, bpg/proxmox-style."},
+		"api_token":  schema.StringAttribute{Required: true, Sensitive: true, MarkdownDescription: "API token user@realm!tokenid=secret."},
+		"insecure":   schema.BoolAttribute{Optional: true, MarkdownDescription: "Disable TLS validation; default false."},
+		"ssh_target": schema.StringAttribute{Optional: true, MarkdownDescription: "SSH endpoint of the *single designated PVE coordinator*, including user if necessary. Requires root runner installed separately."},
 	}}
 }
 
 type config struct {
 	Endpoint types.String `tfsdk:"endpoint"`
- Token types.String `tfsdk:"api_token"`
- Insecure types.Bool `tfsdk:"insecure"`
+	Token    types.String `tfsdk:"api_token"`
+	Insecure types.Bool   `tfsdk:"insecure"`
 	SSH      types.String `tfsdk:"ssh_target"`
 }
 
@@ -52,11 +52,11 @@ func (p *CommunityScriptsProvider) Configure(ctx context.Context, req provider.C
 		return
 	}
 	parts := strings.SplitN(c.Token.ValueString(), "=", 2)
- if len(parts)!=2 || parts[0]=="" || parts[1]=="" {
-   r.Diagnostics.AddError("Invalid API token", "api_token must be user@realm!tokenid=secret")
-   return
- }
- api, e := proxmox.NewClient(c.Endpoint.ValueString(), parts[0], parts[1], c.Insecure.ValueBool())
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		r.Diagnostics.AddError("Invalid API token", "api_token must be user@realm!tokenid=secret")
+		return
+	}
+	api, e := proxmox.NewClient(c.Endpoint.ValueString(), parts[0], parts[1], c.Insecure.ValueBool())
 	if e != nil {
 		r.Diagnostics.AddError("Invalid Proxmox endpoint", e.Error())
 		return

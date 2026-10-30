@@ -61,12 +61,22 @@ func TestCanonicalUpdateBackupStorage(t *testing.T) {
 }
 
 func TestBothKindsUseVMID(t *testing.T) {
- m:=guestModel{Node:types.StringValue("pve1"),Kind:types.StringValue("lxc"),VMID:types.Int64Value(120),Script:types.StringValue("adguard")}
- if e:=m.validate();e!=nil{t.Fatal(e)}
- if m.id().String()!="lxc/120"{t.Fatal(m.id())}
- m.Kind=types.StringValue("vm")
- if e:=m.validate();e!=nil{t.Fatal(e)}
- if m.id().String()!="vm/120"{t.Fatal(m.id())}
- m.VMID=types.Int64Null()
- if e:=m.validate();e==nil{t.Fatal("missing vm_id accepted")}
+	m := guestModel{Node: types.StringValue("pve1"), Kind: types.StringValue("lxc"), VMID: types.Int64Value(120), Script: types.StringValue("adguard")}
+	if e := m.validate(); e != nil {
+		t.Fatal(e)
+	}
+	if m.id().String() != "lxc/120" {
+		t.Fatal(m.id())
+	}
+	m.Kind = types.StringValue("vm")
+	if e := m.validate(); e != nil {
+		t.Fatal(e)
+	}
+	if m.id().String() != "vm/120" {
+		t.Fatal(m.id())
+	}
+	m.VMID = types.Int64Null()
+	if e := m.validate(); e == nil {
+		t.Fatal("missing vm_id accepted")
+	}
 }

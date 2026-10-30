@@ -76,7 +76,7 @@ type guestModel struct {
 	AllowImportedDestroy types.Bool   `tfsdk:"allow_imported_destroy"`
 }
 
-func (m guestModel) numericID() int64 {return m.VMID.ValueInt64()}
+func (m guestModel) numericID() int64 { return m.VMID.ValueInt64() }
 func (m guestModel) id() recovery.ID {
 	return recovery.ID{Kind: m.Kind.ValueString(), VMID: m.numericID()}
 }
@@ -142,8 +142,12 @@ func (m guestModel) validate() error {
 	if m.Node.IsNull() || m.Kind.IsNull() || m.Script.IsNull() {
 		return fmt.Errorf("node, kind and script must be set")
 	}
-	if m.Kind.ValueString()!="lxc" && m.Kind.ValueString()!="vm" {return fmt.Errorf("kind must be lxc or vm")}
- if m.VMID.IsNull() || m.VMID.IsUnknown() {return fmt.Errorf("vm_id is required for LXC and VM")}
+	if m.Kind.ValueString() != "lxc" && m.Kind.ValueString() != "vm" {
+		return fmt.Errorf("kind must be lxc or vm")
+	}
+	if m.VMID.IsNull() || m.VMID.IsUnknown() {
+		return fmt.Errorf("vm_id is required for LXC and VM")
+	}
 	if _, e := recovery.ParseID(m.id().String()); e != nil {
 		return e
 	}
@@ -249,10 +253,10 @@ func (r *GuestResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		resp.Diagnostics.AddError("Guest kind conflicts with imported state", "Type in HCL does not match imported identity; retaining state.")
 		return
 	}
-if !m.VMID.IsNull() && m.VMID.ValueInt64()!=id.VMID {
-  resp.Diagnostics.AddError("Conflicting vm_id", "Configured vm_id does not match imported identity.")
-  return
- }
+	if !m.VMID.IsNull() && m.VMID.ValueInt64() != id.VMID {
+		resp.Diagnostics.AddError("Conflicting vm_id", "Configured vm_id does not match imported identity.")
+		return
+	}
 
 	if g.Kind != id.Kind {
 		resp.Diagnostics.AddError("VMID collision", fmt.Sprintf("VMID %d is %s, not %s; retaining state.", id.VMID, g.Kind, id.Kind))
